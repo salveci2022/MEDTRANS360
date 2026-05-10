@@ -1,11 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Financeiro — MEDTRANS 360{% endblock %}
-{% block page_title %}💰 Financeiro{% endblock %}
+{% block page_title %}Financeiro{% endblock %}
 {% block content %}
-<div style="display:flex;gap:12px;margin-bottom:20px;align-items:center;flex-wrap:wrap">
-  <input type="month" id="mes-sel" onchange="loadFinanceiro()" style="max-width:160px">
-  <a id="link-pdf" href="/relatorio/mensal" target="_blank" class="btn btn-ghost">📄 PDF do Mês</a>
+<div style="display:flex;gap:10px;margin-bottom:20px;align-items:center;flex-wrap:wrap">
+  <input type="month" id="mes-sel" onchange="loadFinanceiro()" style="max-width:150px;min-height:44px">
   <button class="btn btn-primary" onclick="openModal('modal-desp')">+ Lançar Despesa</button>
+  <a id="link-pdf" href="/relatorio/mensal" target="_blank" class="btn btn-ghost">↓ PDF</a>
+  <a href="/export/corridas.xlsx" class="btn btn-ghost">↓ Excel</a>
+  <button class="btn btn-ghost" onclick="irMesAtual()">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+    Mês Atual
+  </button>
 </div>
 <div class="stat-grid" style="grid-template-columns:repeat(4,1fr)">
   <div class="stat-card c-green"><div class="stat-label">Faturamento</div><div class="stat-value cv-green" id="f-fat">—</div></div>
@@ -40,6 +45,10 @@
       <div class="form-group full"><label>Descrição</label><input id="d-desc" placeholder="Detalhes da despesa"></div>
     </div>
     <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="limparFormDesp()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+        Limpar
+      </button>
       <button class="btn btn-ghost" onclick="closeModal('modal-desp')">Cancelar</button>
       <button class="btn btn-primary" onclick="lancarDespesa()">Lançar</button>
     </div>
@@ -78,9 +87,37 @@ async function lancarDespesa(){
     data:document.getElementById('d-data').value,
     descricao:document.getElementById('d-desc').value};
   const d=await api('/api/despesas','POST',body);
-  if(d.ok){toast('Despesa lançada!','success');closeModal('modal-desp');loadFinanceiro();}
+  if(d.ok){toast('Despesa lançada!','success');closeModal('modal-desp');loadFinanceiro();
+
+function irMesAtual(){
+  mesEl.value = new Date().toISOString().slice(0,7);
+  loadFinanceiro();
+  toast('Mostrando mês atual','info');
+}
+
+function limparFormDesp(){
+  document.getElementById('d-valor').value='';
+  document.getElementById('d-desc').value='';
+  document.getElementById('d-data').value=new Date().toISOString().split('T')[0];
+  document.getElementById('d-tipo').value='Combustível';
+  toast('Formulário limpo','info');
+}}
   else toast('Erro','error');
 }
 loadFinanceiro();
+
+function irMesAtual(){
+  mesEl.value = new Date().toISOString().slice(0,7);
+  loadFinanceiro();
+  toast('Mostrando mês atual','info');
+}
+
+function limparFormDesp(){
+  document.getElementById('d-valor').value='';
+  document.getElementById('d-desc').value='';
+  document.getElementById('d-data').value=new Date().toISOString().split('T')[0];
+  document.getElementById('d-tipo').value='Combustível';
+  toast('Formulário limpo','info');
+}
 </script>
 {% endblock %}

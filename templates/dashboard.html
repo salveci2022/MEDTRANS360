@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Dashboard — MEDTRANS 360{% endblock %}
-{% block page_title %}📊 Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
 {% block content %}
 <div class="stat-grid" id="stat-grid">
-  <div class="stat-card c-blue"><div class="stat-label">Total Corridas</div><div class="stat-value cv-blue" id="s-total">—</div><div class="stat-sub">Todas as corridas</div></div>
-  <div class="stat-card c-green"><div class="stat-label">Corridas Hoje</div><div class="stat-value cv-green" id="s-hoje">—</div><div class="stat-sub">Agendadas hoje</div></div>
-  <div class="stat-card c-amber"><div class="stat-label">Em Andamento</div><div class="stat-value cv-amber" id="s-andamento">—</div><div class="stat-sub">Corridas ativas</div></div>
-  <div class="stat-card c-purple"><div class="stat-label">Pacientes</div><div class="stat-value cv-purple" id="s-pacientes">—</div><div class="stat-sub">Cadastrados ativos</div></div>
-  <div class="stat-card c-cyan"><div class="stat-label">Motoristas Online</div><div class="stat-value cv-cyan" id="s-motoristas">—</div><div class="stat-sub">Disponíveis agora</div></div>
-  <div class="stat-card c-green"><div class="stat-label">Faturamento</div><div class="stat-value cv-green" id="s-fat">—</div><div class="stat-sub">Corridas finalizadas</div></div>
-  <div class="stat-card c-red"><div class="stat-label">Despesas</div><div class="stat-value cv-red" id="s-desp">—</div><div class="stat-sub">Total de custos</div></div>
-  <div class="stat-card c-blue"><div class="stat-label">Lucro Líquido</div><div class="stat-value cv-blue" id="s-lucro">—</div><div class="stat-sub">Faturamento − Despesas</div></div>
+  <div class="stat-card c-blue"><div class="stat-label">Total Corridas</div><div class="stat-value cv-blue" id="s-total">0</div><div class="stat-sub">Todas as corridas</div></div>
+  <div class="stat-card c-green"><div class="stat-label">Corridas Hoje</div><div class="stat-value cv-green" id="s-hoje">0</div><div class="stat-sub">Agendadas hoje</div></div>
+  <div class="stat-card c-amber"><div class="stat-label">Em Andamento</div><div class="stat-value cv-amber" id="s-andamento">0</div><div class="stat-sub">Corridas ativas</div></div>
+  <div class="stat-card c-purple"><div class="stat-label">Pacientes</div><div class="stat-value cv-purple" id="s-pacientes">0</div><div class="stat-sub">Cadastrados ativos</div></div>
+  <div class="stat-card c-cyan"><div class="stat-label">Motoristas Online</div><div class="stat-value cv-cyan" id="s-motoristas">0</div><div class="stat-sub">Disponíveis agora</div></div>
+  <div class="stat-card c-green"><div class="stat-label">Faturamento</div><div class="stat-value cv-green" id="s-fat">R$ 0,00</div><div class="stat-sub">Corridas finalizadas</div></div>
+  <div class="stat-card c-red"><div class="stat-label">Despesas</div><div class="stat-value cv-red" id="s-desp">R$ 0,00</div><div class="stat-sub">Total de custos</div></div>
+  <div class="stat-card c-blue"><div class="stat-label">Lucro Líquido</div><div class="stat-value cv-blue" id="s-lucro">R$ 0,00</div><div class="stat-sub">Faturamento menos despesas</div></div>
 </div>
 
 <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px">
@@ -33,7 +33,7 @@
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <a href="/corridas" class="btn btn-primary btn-sm">+ Nova Corrida</a>
         <a href="/relatorio/mensal" target="_blank" class="btn btn-ghost btn-sm">📄 PDF</a>
-        <a href="/export/corridas.xlsx" class="btn btn-ghost btn-sm">📥 Excel</a>
+        <a href="/export/corridas.xlsx" class="btn btn-ghost btn-sm">↓ Excel</a>
       </div>
     </div>
   </div>

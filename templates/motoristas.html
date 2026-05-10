@@ -1,9 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Motoristas — MEDTRANS 360{% endblock %}
-{% block page_title %}🧑‍✈️ Motoristas{% endblock %}
+{% block page_title %}Motoristas{% endblock %}
 {% block content %}
-<div style="display:flex;gap:12px;margin-bottom:20px">
+<div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
   <button class="btn btn-primary" onclick="openModal('modal-mot')">+ Novo Motorista</button>
+  <button class="btn btn-ghost" onclick="loadMotoristas()">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+    Recarregar
+  </button>
+  <button class="btn btn-ghost" onclick="colocarTodosOffline()" title="Colocar todos offline">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+    Todos Offline
+  </button>
 </div>
 <div class="card">
   <div class="table-wrap">
@@ -15,7 +23,7 @@
 </div>
 <div class="modal-overlay" id="modal-mot">
   <div class="modal">
-    <div class="modal-title">🧑‍✈️ Novo Motorista <button class="modal-close" onclick="closeModal('modal-mot')">✕</button></div>
+    <div class="modal-title">Novo Motorista <button class="modal-close" onclick="closeModal('modal-mot')">✕</button></div>
     <div class="form-grid">
       <div class="form-group full"><label>Nome Completo *</label><input id="m-nome" placeholder="Nome do motorista"></div>
       <div class="form-group"><label>CPF</label><input id="m-cpf" placeholder="000.000.000-00"></div>
@@ -25,9 +33,15 @@
       <div class="form-group"><label>Placa</label><input id="m-placa" placeholder="AAA-0000"></div>
       <div class="form-group"><label>Consumo Médio (km/l)</label><input id="m-consumo" type="number" value="10" step="0.1"></div>
     </div>
-    <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
-      <button class="btn btn-ghost" onclick="closeModal('modal-mot')">Cancelar</button>
-      <button class="btn btn-primary" onclick="criarMotorista()">Salvar Motorista</button>
+    <div style="display:flex;gap:10px;margin-top:20px;justify-content:space-between;flex-wrap:wrap">
+      <button class="btn btn-ghost" onclick="limparFormMot()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+        Limpar
+      </button>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-ghost" onclick="closeModal('modal-mot')">Cancelar</button>
+        <button class="btn btn-primary" onclick="criarMotorista()">Salvar Motorista</button>
+      </div>
     </div>
   </div>
 </div>
@@ -49,7 +63,9 @@ async function loadMotoristas(){
         <button class="btn btn-sm ${m.status==='online'?'btn-danger':'btn-success'}" onclick="toggleStatus(${m.id},'${m.status==='online'?'offline':'online'}')">
           ${m.status==='online'?'Offline':'Online'}
         </button>
-        <button class="btn btn-sm btn-danger" onclick="deletar(${m.id})">🗑</button>
+        <button class="btn btn-sm btn-danger" onclick="deletar(${m.id})" title="Apagar motorista">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+        </button>
       </td>
     </tr>`).join('');
 }
@@ -60,18 +76,86 @@ async function criarMotorista(){
     consumo_km:parseFloat(document.getElementById('m-consumo').value)||10};
   if(!body.nome){toast('Informe o nome','error');return;}
   const d=await api('/api/motoristas','POST',body);
-  if(d.ok){toast('Motorista cadastrado!','success');closeModal('modal-mot');loadMotoristas();}
+  if(d.ok){toast('Motorista cadastrado!','success');closeModal('modal-mot');loadMotoristas();
+
+function limparFormMot(){
+  ['m-nome','m-cpf','m-cnh','m-tel','m-veiculo','m-placa'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('m-consumo').value='10';
+  toast('Formulário limpo','info');
+}
+
+async function colocarTodosOffline(){
+  if(!confirm('Colocar todos os motoristas como offline?')) return;
+  const d = await api('/api/motoristas');
+  const online = (d.motoristas||[]).filter(m=>m.status==='online');
+  await Promise.all(online.map(m=>api(`/api/motoristas/${m.id}/status`,'POST',{status:'offline'})));
+  toast(`${online.length} motoristas colocados offline`,'info');
+  loadMotoristas();
+}}
   else toast('Erro: '+d.error,'error');
 }
 async function toggleStatus(id,status){
   await api(`/api/motoristas/${id}/status`,'POST',{status});
   loadMotoristas();
+
+function limparFormMot(){
+  ['m-nome','m-cpf','m-cnh','m-tel','m-veiculo','m-placa'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('m-consumo').value='10';
+  toast('Formulário limpo','info');
+}
+
+async function colocarTodosOffline(){
+  if(!confirm('Colocar todos os motoristas como offline?')) return;
+  const d = await api('/api/motoristas');
+  const online = (d.motoristas||[]).filter(m=>m.status==='online');
+  await Promise.all(online.map(m=>api(`/api/motoristas/${m.id}/status`,'POST',{status:'offline'})));
+  toast(`${online.length} motoristas colocados offline`,'info');
+  loadMotoristas();
+}
 }
 async function deletar(id){
   if(!confirm('Remover este motorista?'))return;
   await api(`/api/motoristas/${id}`,'DELETE');
   toast('Removido','info'); loadMotoristas();
+
+function limparFormMot(){
+  ['m-nome','m-cpf','m-cnh','m-tel','m-veiculo','m-placa'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('m-consumo').value='10';
+  toast('Formulário limpo','info');
+}
+
+async function colocarTodosOffline(){
+  if(!confirm('Colocar todos os motoristas como offline?')) return;
+  const d = await api('/api/motoristas');
+  const online = (d.motoristas||[]).filter(m=>m.status==='online');
+  await Promise.all(online.map(m=>api(`/api/motoristas/${m.id}/status`,'POST',{status:'offline'})));
+  toast(`${online.length} motoristas colocados offline`,'info');
+  loadMotoristas();
+}
 }
 loadMotoristas();
+
+function limparFormMot(){
+  ['m-nome','m-cpf','m-cnh','m-tel','m-veiculo','m-placa'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('m-consumo').value='10';
+  toast('Formulário limpo','info');
+}
+
+async function colocarTodosOffline(){
+  if(!confirm('Colocar todos os motoristas como offline?')) return;
+  const d = await api('/api/motoristas');
+  const online = (d.motoristas||[]).filter(m=>m.status==='online');
+  await Promise.all(online.map(m=>api(`/api/motoristas/${m.id}/status`,'POST',{status:'offline'})));
+  toast(`${online.length} motoristas colocados offline`,'info');
+  loadMotoristas();
+}
 </script>
 {% endblock %}

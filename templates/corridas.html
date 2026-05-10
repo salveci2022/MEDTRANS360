@@ -1,18 +1,26 @@
 {% extends "base.html" %}
 {% block title %}Corridas — MEDTRANS 360{% endblock %}
-{% block page_title %}🚗 Corridas{% endblock %}
+{% block page_title %}Corridas{% endblock %}
 {% block content %}
-<div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;align-items:center">
-  <button class="btn btn-primary" onclick="openModal('modal-corrida')">+ Nova Corrida</button>
-  <select id="filtro-status" onchange="loadCorridas()" style="max-width:160px">
+<div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center">
+  <button class="btn btn-primary" onclick="openModal('modal-corrida');loadSelects()">+ Nova Corrida</button>
+  <select id="filtro-status" onchange="loadCorridas()" style="max-width:150px;min-height:44px">
     <option value="">Todos os status</option>
     <option value="agendada">Agendadas</option>
     <option value="em_andamento">Em Andamento</option>
     <option value="finalizada">Finalizadas</option>
     <option value="cancelada">Canceladas</option>
   </select>
-  <a href="/export/corridas.xlsx" class="btn btn-ghost">📥 Excel</a>
-  <a href="/relatorio/mensal" target="_blank" class="btn btn-ghost">📄 PDF Mensal</a>
+  <a href="/export/corridas.xlsx" class="btn btn-ghost">↓ Excel</a>
+  <a href="/relatorio/mensal" target="_blank" class="btn btn-ghost">↓ PDF</a>
+  <button class="btn btn-ghost" onclick="limparFiltros()" title="Limpar filtros e recarregar">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+    Recarregar
+  </button>
+  <button class="btn btn-danger" onclick="confirmarLimparTodas()" title="Apagar todas as corridas canceladas">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+    Limpar Canceladas
+  </button>
 </div>
 
 <div class="card">
@@ -33,7 +41,7 @@
 <div class="modal-overlay" id="modal-corrida">
   <div class="modal" style="max-width:640px">
     <div class="modal-title">
-      🚗 Nova Corrida
+      Nova Corrida
       <button class="modal-close" onclick="closeModal('modal-corrida')">✕</button>
     </div>
     <div class="form-grid">
@@ -82,9 +90,15 @@
         <textarea id="c-obs" placeholder="Informações adicionais sobre o transporte..."></textarea>
       </div>
     </div>
-    <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
-      <button class="btn btn-ghost" onclick="closeModal('modal-corrida')">Cancelar</button>
-      <button class="btn btn-primary" onclick="criarCorrida()">Criar Corrida</button>
+    <div style="display:flex;gap:10px;margin-top:20px;justify-content:space-between;flex-wrap:wrap">
+      <button class="btn btn-ghost" onclick="limparFormCorrida()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+        Limpar campos
+      </button>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-ghost" onclick="closeModal('modal-corrida')">Cancelar</button>
+        <button class="btn btn-primary" onclick="criarCorrida()">Criar Corrida</button>
+      </div>
     </div>
   </div>
 </div>
@@ -132,8 +146,13 @@ async function loadCorridas(){
           ${c.status==='agendada'?`<button class="btn btn-sm btn-success" onclick="acionar(${c.id},'em_andamento')">▶ Iniciar</button>`:''}
           ${c.status==='em_andamento'?`<button class="btn btn-sm btn-primary" onclick="acionar(${c.id},'finalizada')">✓ Finalizar</button>`:''}
           ${['agendada','em_andamento'].includes(c.status)?`<button class="btn btn-sm btn-danger" onclick="acionar(${c.id},'cancelada')">✕</button>`:''}
-          <a class="btn btn-sm btn-ghost" href="/relatorio/corrida/${c.id}" target="_blank">📄</a>
-          <button class="btn btn-sm btn-danger" onclick="deletarCorrida(${c.id})">🗑</button>
+          <a class="btn btn-sm btn-ghost" href="/relatorio/corrida/${c.id}" target="_blank">PDF</a>
+          <button class="btn btn-sm btn-ghost" onclick="duplicarCorrida(${c.id})" title="Duplicar corrida">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          </button>
+          <button class="btn btn-sm btn-danger" onclick="deletarCorrida(${c.id})" title="Apagar corrida">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+          </button>
         </div>
       </td>
     </tr>`).join('');
@@ -200,5 +219,35 @@ document.getElementById('c-data').value = new Date().toISOString().split('T')[0]
 loadSelects();
 loadCorridas();
 setInterval(loadCorridas, 20000);
+
+function limparFiltros(){
+  document.getElementById('filtro-status').value = '';
+  loadCorridas();
+  toast('Lista atualizada','info');
+}
+
+async function confirmarLimparTodas(){
+  if(!confirm('Apagar TODAS as corridas canceladas permanentemente? Esta ação não pode ser desfeita.')) return;
+  const d = await api('/api/corridas/limpar-canceladas','POST');
+  if(d.ok){ toast(`${d.removidas} corridas canceladas removidas`,'success'); loadCorridas(); }
+  else toast('Erro: '+d.error,'error');
+}
+
+async function duplicarCorrida(rid){
+  const d = await api(`/api/corridas/${rid}/duplicar`,'POST');
+  if(d.ok){ toast('Corrida duplicada! Edite os dados.','success'); loadCorridas(); }
+  else toast('Erro ao duplicar','error');
+}
+
+// Limpar formulário nova corrida
+function limparFormCorrida(){
+  ['c-paciente','c-motorista','c-tipo','c-origem','c-destino','c-valor','c-obs'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.value = el.tagName==='SELECT' ? el.options[0].value : '';
+  });
+  document.getElementById('c-data').value = new Date().toISOString().split('T')[0];
+  document.getElementById('c-hora').value = '';
+  toast('Formulário limpo','info');
+}
 </script>
 {% endblock %}

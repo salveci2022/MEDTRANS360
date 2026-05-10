@@ -842,6 +842,49 @@ def export_excel():
 # ════════════════════════════════════════════════
 #  HEALTH + ERROS
 # ════════════════════════════════════════════════
+
+
+@app.route('/api/corridas/limpar-canceladas', methods=['POST'])
+@login_required
+def limpar_canceladas():
+    cid = clinica_filter()
+    with get_conn() as conn:
+        if cid:
+            cur = conn.execute("DELETE FROM corridas WHERE status='cancelada' AND clinica_id=?", (cid,))
+        else:
+            cur = conn.execute("DELETE FROM corridas WHERE status='cancelada'")
+        removidas = cur.rowcount
+    audit(session.get('email'), 'CORRIDAS_CANCELADAS_REMOVIDAS', f'{removidas} registros', get_ip())
+    return jsonify({'ok': True, 'removidas': removidas})
+
+@app.route('/api/corridas/<int:rid>/duplicar', methods=['POST'])
+@login_required
+def duplicar_corrida(rid):
+    with get_conn() as conn:
+        orig = conn.execute("SELECT * FROM corridas WHERE id=?", (rid,)).fetchone()
+        if not orig:
+            return jsonify({'ok': False, 'error': 'Corrida não encontrada'}), 404
+        orig = dict(orig)
+        cur = conn.execute("""
+            INSERT INTO corridas
+              (paciente_id,motorista_id,clinica_id,tipo,origem,destino,
+               lat_origem,lng_origem,lat_destino,lng_destino,
+               data_agendada,hora_saida,valor,observacoes,status)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'agendada')
+        """, (orig.get('paciente_id'), orig.get('motorista_id'), orig.get('clinica_id'),
+              orig.get('tipo'), orig.get('origem'), orig.get('destino'),
+              orig.get('lat_origem'), orig.get('lng_origem'),
+              orig.get('lat_destino'), orig.get('lng_destino'),
+              orig.get('data_agendada'), orig.get('hora_saida'),
+              orig.get('valor'), orig.get('observacoes')))
+        new_id = cur.lastrowid
+    audit(session.get('email'), 'CORRIDA_DUPLICADA', f'original={rid} nova={new_id}', get_ip())
+    return jsonify({'ok': True, 'id': new_id})
+
+@app.route('/static/sw.js')
+def service_worker():
+    return send_file('static/sw.js', mimetype='application/javascript')
+
 @app.route('/health')
 def health():
     return jsonify({'status':'healthy','app':'MEDTRANS 360','version':'1.0-PRO',

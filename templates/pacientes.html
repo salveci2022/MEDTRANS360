@@ -1,9 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Pacientes — MEDTRANS 360{% endblock %}
-{% block page_title %}🏥 Pacientes{% endblock %}
+{% block page_title %}Pacientes{% endblock %}
 {% block content %}
-<div style="display:flex;gap:12px;margin-bottom:20px">
+<div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
   <button class="btn btn-primary" onclick="openModal('modal-pac');loadClinicas()">+ Novo Paciente</button>
+  <button class="btn btn-ghost" onclick="loadPacientes()">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+    Recarregar
+  </button>
 </div>
 <div class="card">
   <div class="table-wrap">
@@ -15,7 +19,7 @@
 </div>
 <div class="modal-overlay" id="modal-pac">
   <div class="modal">
-    <div class="modal-title">🏥 Novo Paciente <button class="modal-close" onclick="closeModal('modal-pac')">✕</button></div>
+    <div class="modal-title">Novo Paciente <button class="modal-close" onclick="closeModal('modal-pac')">✕</button></div>
     <div class="form-grid">
       <div class="form-group full"><label>Nome Completo *</label><input id="p-nome" placeholder="Nome do paciente"></div>
       <div class="form-group"><label>CPF</label><input id="p-cpf" placeholder="000.000.000-00"></div>
@@ -27,9 +31,15 @@
       <div class="form-group"><label>Acompanhante</label><input id="p-acomp" placeholder="Nome do acompanhante"></div>
       <div class="form-group full"><label>Observações Médicas</label><textarea id="p-obs" placeholder="Condições especiais, alergias, necessidades..."></textarea></div>
     </div>
-    <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
-      <button class="btn btn-ghost" onclick="closeModal('modal-pac')">Cancelar</button>
-      <button class="btn btn-primary" onclick="criarPaciente()">Salvar Paciente</button>
+    <div style="display:flex;gap:10px;margin-top:20px;justify-content:space-between;flex-wrap:wrap">
+      <button class="btn btn-ghost" onclick="limparFormPac()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+        Limpar
+      </button>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-ghost" onclick="closeModal('modal-pac')">Cancelar</button>
+        <button class="btn btn-primary" onclick="criarPaciente()">Salvar Paciente</button>
+      </div>
     </div>
   </div>
 </div>
@@ -46,7 +56,14 @@ async function loadPacientes(){
       <td>${p.cpf||'—'}</td><td>${p.telefone||'—'}</td>
       <td>${p.cidade||'—'}</td><td>${p.clinica_nome||'—'}</td>
       <td>${p.acompanhante||'—'}</td>
-      <td><button class="btn btn-sm btn-danger" onclick="deletar(${p.id})">🗑</button></td>
+      <td style="display:flex;gap:6px">
+        <button class="btn btn-sm btn-ghost" onclick="editarPaciente(${p.id},'${(p.nome||'').replace(/'/g,'')}')" title="Editar">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="btn btn-sm btn-danger" onclick="deletar(${p.id})" title="Apagar">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+        </button>
+      </td>
     </tr>`).join('');
 }
 async function loadClinicas(){
@@ -73,5 +90,18 @@ async function deletar(id){
   if(d.ok){toast('Removido','info');loadPacientes();}
 }
 loadClinicas(); loadPacientes();
+
+function limparFormPac(){
+  ['p-nome','p-cpf','p-tel','p-end','p-cidade','p-acomp','p-obs'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('p-estado').value='DF';
+  document.getElementById('p-clinica').value='';
+  toast('Formulário limpo','info');
+}
+
+function editarPaciente(id, nome){
+  toast('Edição: selecione o paciente na lista e use os campos do formulário','info');
+}
 </script>
 {% endblock %}
