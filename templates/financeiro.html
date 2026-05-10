@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Financeiro — MEDTRANS 360{% endblock %}
+{% block page_title %}💰 Financeiro{% endblock %}
+{% block content %}
+<div style="display:flex;gap:12px;margin-bottom:20px;align-items:center;flex-wrap:wrap">
+  <input type="month" id="mes-sel" onchange="loadFinanceiro()" style="max-width:160px">
+  <a id="link-pdf" href="/relatorio/mensal" target="_blank" class="btn btn-ghost">📄 PDF do Mês</a>
+  <button class="btn btn-primary" onclick="openModal('modal-desp')">+ Lançar Despesa</button>
+</div>
+<div class="stat-grid" style="grid-template-columns:repeat(4,1fr)">
+  <div class="stat-card c-green"><div class="stat-label">Faturamento</div><div class="stat-value cv-green" id="f-fat">—</div></div>
+  <div class="stat-card c-red"><div class="stat-label">Despesas</div><div class="stat-value cv-red" id="f-desp">—</div></div>
+  <div class="stat-card c-blue"><div class="stat-label">Lucro Líquido</div><div class="stat-value cv-blue" id="f-lucro">—</div></div>
+  <div class="stat-card c-purple"><div class="stat-label">Custo/km</div><div class="stat-value cv-purple" id="f-custo">—</div></div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+  <div class="card">
+    <h3 style="font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;margin-bottom:16px">Corridas do mês</h3>
+    <div style="font-size:2rem;font-weight:800;color:var(--cyan)" id="f-corridas">—</div>
+    <div style="font-size:13px;color:var(--muted);margin-top:4px" id="f-km">—</div>
+  </div>
+  <div class="card">
+    <h3 style="font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;margin-bottom:16px">Despesas por Tipo</h3>
+    <div id="desp-tipos"></div>
+  </div>
+</div>
+<div class="modal-overlay" id="modal-desp">
+  <div class="modal">
+    <div class="modal-title">+ Lançar Despesa <button class="modal-close" onclick="closeModal('modal-desp')">✕</button></div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Tipo</label>
+        <select id="d-tipo">
+          <option>Combustível</option><option>Pedágio</option><option>Manutenção</option>
+          <option>Seguro</option><option>Motorista</option><option>Outros</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Valor (R$)</label><input id="d-valor" type="number" step="0.01" placeholder="0,00"></div>
+      <div class="form-group"><label>Data</label><input id="d-data" type="date"></div>
+      <div class="form-group full"><label>Descrição</label><input id="d-desc" placeholder="Detalhes da despesa"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal('modal-desp')">Cancelar</button>
+      <button class="btn btn-primary" onclick="lancarDespesa()">Lançar</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const mesEl = document.getElementById('mes-sel');
+mesEl.value = new Date().toISOString().slice(0,7);
+document.getElementById('d-data').value = new Date().toISOString().split('T')[0];
+
+function fmt(v){ return 'R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2}); }
+
+async function loadFinanceiro(){
+  const mes = mesEl.value;
+  document.getElementById('link-pdf').href = `/relatorio/mensal?mes=${mes}`;
+  const d = await api(`/api/financeiro/resumo?mes=${mes}`);
+  if(!d.ok) return;
+  document.getElementById('f-fat').textContent = fmt(d.faturamento);
+  document.getElementById('f-desp').textContent = fmt(d.despesas);
+  document.getElementById('f-lucro').textContent = fmt(d.lucro);
+  document.getElementById('f-custo').textContent = 'R$ '+Number(d.custo_km).toFixed(2)+'/km';
+  document.getElementById('f-corridas').textContent = d.corridas;
+  document.getElementById('f-km').textContent = `Total: ${Number(d.km_total).toFixed(1)} km rodados`;
+  const tipos = d.despesas_por_tipo || [];
+  document.getElementById('desp-tipos').innerHTML = tipos.length ?
+    tipos.map(t=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:14px">
+      <span>${t.tipo}</span><span style="color:var(--red)">${fmt(t.total)}</span></div>`).join('') :
+    '<p style="color:var(--muted);font-size:14px">Nenhuma despesa lançada</p>';
+}
+
+async function lancarDespesa(){
+  const body={tipo:document.getElementById('d-tipo').value,
+    valor:parseFloat(document.getElementById('d-valor').value)||0,
+    data:document.getElementById('d-data').value,
+    descricao:document.getElementById('d-desc').value};
+  const d=await api('/api/despesas','POST',body);
+  if(d.ok){toast('Despesa lançada!','success');closeModal('modal-desp');loadFinanceiro();}
+  else toast('Erro','error');
+}
+loadFinanceiro();
+</script>
+{% endblock %}

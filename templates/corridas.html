@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}Corridas — MEDTRANS 360{% endblock %}
+{% block page_title %}🚗 Corridas{% endblock %}
+{% block content %}
+<div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;align-items:center">
+  <button class="btn btn-primary" onclick="openModal('modal-corrida')">+ Nova Corrida</button>
+  <select id="filtro-status" onchange="loadCorridas()" style="max-width:160px">
+    <option value="">Todos os status</option>
+    <option value="agendada">Agendadas</option>
+    <option value="em_andamento">Em Andamento</option>
+    <option value="finalizada">Finalizadas</option>
+    <option value="cancelada">Canceladas</option>
+  </select>
+  <a href="/export/corridas.xlsx" class="btn btn-ghost">📥 Excel</a>
+  <a href="/relatorio/mensal" target="_blank" class="btn btn-ghost">📄 PDF Mensal</a>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>#</th><th>Paciente</th><th>Motorista</th><th>Clínica</th>
+        <th>Data</th><th>Origem → Destino</th><th>Km</th><th>Valor</th><th>Status</th><th>Ações</th>
+      </tr></thead>
+      <tbody id="tbody-corridas">
+        <tr><td colspan="10"><div class="loading"><div class="spinner"></div> Carregando...</div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal Nova Corrida -->
+<div class="modal-overlay" id="modal-corrida">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-title">
+      🚗 Nova Corrida
+      <button class="modal-close" onclick="closeModal('modal-corrida')">✕</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Paciente *</label>
+        <select id="c-paciente" required></select>
+      </div>
+      <div class="form-group">
+        <label>Motorista</label>
+        <select id="c-motorista"><option value="">Selecionar depois</option></select>
+      </div>
+      <div class="form-group">
+        <label>Tipo</label>
+        <select id="c-tipo">
+          <option value="ida">Ida (Casa → Clínica)</option>
+          <option value="volta">Volta (Clínica → Casa)</option>
+          <option value="consulta">Consulta</option>
+          <option value="exame">Exame</option>
+          <option value="fisioterapia">Fisioterapia</option>
+          <option value="hemodialise">Hemodiálise</option>
+          <option value="emergencia">Emergência</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Data Agendada</label>
+        <input type="date" id="c-data">
+      </div>
+      <div class="form-group">
+        <label>Origem</label>
+        <input type="text" id="c-origem" placeholder="Endereço de partida">
+      </div>
+      <div class="form-group">
+        <label>Destino</label>
+        <input type="text" id="c-destino" placeholder="Endereço de chegada">
+      </div>
+      <div class="form-group">
+        <label>Valor (R$)</label>
+        <input type="number" id="c-valor" step="0.01" placeholder="0,00">
+      </div>
+      <div class="form-group">
+        <label>Hora de Saída</label>
+        <input type="time" id="c-hora">
+      </div>
+      <div class="form-group full">
+        <label>Observações</label>
+        <textarea id="c-obs" placeholder="Informações adicionais sobre o transporte..."></textarea>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal('modal-corrida')">Cancelar</button>
+      <button class="btn btn-primary" onclick="criarCorrida()">Criar Corrida</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Ações -->
+<div class="modal-overlay" id="modal-acao">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title" id="acao-title">Ação da Corrida <button class="modal-close" onclick="closeModal('modal-acao')">✕</button></div>
+    <div id="acao-body"></div>
+    <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal('modal-acao')">Cancelar</button>
+      <button class="btn btn-primary" id="acao-btn" onclick="executarAcao()">Confirmar</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const STATUS_LABELS={agendada:'Agendada',em_andamento:'Em Andamento',finalizada:'Finalizada',cancelada:'Cancelada'};
+const STATUS_BADGES={agendada:'badge-blue',em_andamento:'badge-amber',finalizada:'badge-green',cancelada:'badge-red'};
+let currentRid = null, currentAction = null;
+
+async function loadCorridas(){
+  const status = document.getElementById('filtro-status').value;
+  const url = '/api/corridas' + (status ? '?status='+status : '');
+  const d = await api(url);
+  const tbody = document.getElementById('tbody-corridas');
+  if(!d.ok||!d.corridas.length){
+    tbody.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:24px">Nenhuma corrida encontrada</td></tr>';
+    return;
+  }
+  tbody.innerHTML = d.corridas.map(c=>`
+    <tr>
+      <td><a href="/relatorio/corrida/${c.id}" target="_blank" style="color:var(--blue)">#${c.id}</a></td>
+      <td>${c.paciente_nome||'—'}</td>
+      <td>${c.motorista_nome||'—'}</td>
+      <td>${c.clinica_nome||'—'}</td>
+      <td>${c.data_agendada||'—'}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.origem||''} → ${c.destino||''}">${(c.origem||'—').slice(0,15)} → ${(c.destino||'—').slice(0,15)}</td>
+      <td>${Number(c.distancia_km||0).toFixed(1)} km</td>
+      <td>R$ ${Number(c.valor||0).toFixed(2)}</td>
+      <td><span class="badge ${STATUS_BADGES[c.status]||'badge-gray'}">${STATUS_LABELS[c.status]||c.status}</span></td>
+      <td>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          ${c.status==='agendada'?`<button class="btn btn-sm btn-success" onclick="acionar(${c.id},'em_andamento')">▶ Iniciar</button>`:''}
+          ${c.status==='em_andamento'?`<button class="btn btn-sm btn-primary" onclick="acionar(${c.id},'finalizada')">✓ Finalizar</button>`:''}
+          ${['agendada','em_andamento'].includes(c.status)?`<button class="btn btn-sm btn-danger" onclick="acionar(${c.id},'cancelada')">✕</button>`:''}
+          <a class="btn btn-sm btn-ghost" href="/relatorio/corrida/${c.id}" target="_blank">📄</a>
+          <button class="btn btn-sm btn-danger" onclick="deletarCorrida(${c.id})">🗑</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+async function loadSelects(){
+  const [rp, rm] = await Promise.all([api('/api/pacientes'), api('/api/motoristas')]);
+  document.getElementById('c-paciente').innerHTML =
+    '<option value="">Selecione o paciente</option>' +
+    (rp.pacientes||[]).map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
+  document.getElementById('c-motorista').innerHTML =
+    '<option value="">Selecionar depois</option>' +
+    (rm.motoristas||[]).map(m=>`<option value="${m.id}">${m.nome} — ${m.veiculo||'Veículo'}</option>`).join('');
+}
+
+async function criarCorrida(){
+  const body = {
+    paciente_id: document.getElementById('c-paciente').value,
+    motorista_id: document.getElementById('c-motorista').value||null,
+    tipo: document.getElementById('c-tipo').value,
+    data_agendada: document.getElementById('c-data').value,
+    origem: document.getElementById('c-origem').value,
+    destino: document.getElementById('c-destino').value,
+    valor: parseFloat(document.getElementById('c-valor').value)||0,
+    hora_saida: document.getElementById('c-hora').value,
+    observacoes: document.getElementById('c-obs').value,
+  };
+  if(!body.paciente_id){ toast('Selecione o paciente','error'); return; }
+  const d = await api('/api/corridas','POST',body);
+  if(d.ok){ toast('Corrida criada!','success'); closeModal('modal-corrida'); loadCorridas(); }
+  else toast('Erro: '+d.error,'error');
+}
+
+function acionar(rid, action){
+  currentRid = rid; currentAction = action;
+  const labels = {em_andamento:'Iniciar Corrida',finalizada:'Finalizar Corrida',cancelada:'Cancelar Corrida'};
+  document.getElementById('acao-title').childNodes[0].textContent = labels[action]+' ';
+  let body = '';
+  if(action==='em_andamento') body=`<div class="form-group"><label>KM Inicial do Veículo</label><input type="number" id="km-ini" placeholder="Ex: 45000" step="0.1"></div>`;
+  else if(action==='finalizada') body=`<div class="form-group"><label>KM Final do Veículo</label><input type="number" id="km-fim" placeholder="Ex: 45150" step="0.1"></div>`;
+  else body=`<p style="color:var(--muted)">Confirma o cancelamento desta corrida?</p>`;
+  document.getElementById('acao-body').innerHTML = body;
+  const colors = {em_andamento:'btn-success',finalizada:'btn-primary',cancelada:'btn-danger'};
+  document.getElementById('acao-btn').className = 'btn '+colors[action];
+  openModal('modal-acao');
+}
+
+async function executarAcao(){
+  const body = {status: currentAction};
+  if(currentAction==='em_andamento') body.km_inicial = parseFloat(document.getElementById('km-ini')?.value)||0;
+  if(currentAction==='finalizada') body.km_final = parseFloat(document.getElementById('km-fim')?.value)||0;
+  const d = await api(`/api/corridas/${currentRid}/status`,'POST',body);
+  if(d.ok){ toast('Status atualizado!','success'); closeModal('modal-acao'); loadCorridas(); }
+  else toast('Erro: '+d.error,'error');
+}
+
+async function deletarCorrida(rid){
+  if(!confirm('Apagar esta corrida permanentemente?')) return;
+  const d = await api(`/api/corridas/${rid}`,'DELETE');
+  if(d.ok){ toast('Corrida removida','info'); loadCorridas(); }
+}
+
+document.getElementById('c-data').value = new Date().toISOString().split('T')[0];
+loadSelects();
+loadCorridas();
+setInterval(loadCorridas, 20000);
+</script>
+{% endblock %}

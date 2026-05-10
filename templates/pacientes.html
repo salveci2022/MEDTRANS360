@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Pacientes — MEDTRANS 360{% endblock %}
+{% block page_title %}🏥 Pacientes{% endblock %}
+{% block content %}
+<div style="display:flex;gap:12px;margin-bottom:20px">
+  <button class="btn btn-primary" onclick="openModal('modal-pac');loadClinicas()">+ Novo Paciente</button>
+</div>
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Nome</th><th>CPF</th><th>Telefone</th><th>Cidade</th><th>Clínica</th><th>Acompanhante</th><th>Ações</th></tr></thead>
+      <tbody id="tbody-pac"><tr><td colspan="8"><div class="loading"><div class="spinner"></div></div></td></tr></tbody>
+    </table>
+  </div>
+</div>
+<div class="modal-overlay" id="modal-pac">
+  <div class="modal">
+    <div class="modal-title">🏥 Novo Paciente <button class="modal-close" onclick="closeModal('modal-pac')">✕</button></div>
+    <div class="form-grid">
+      <div class="form-group full"><label>Nome Completo *</label><input id="p-nome" placeholder="Nome do paciente"></div>
+      <div class="form-group"><label>CPF</label><input id="p-cpf" placeholder="000.000.000-00"></div>
+      <div class="form-group"><label>Telefone</label><input id="p-tel" placeholder="(00) 00000-0000"></div>
+      <div class="form-group full"><label>Endereço</label><input id="p-end" placeholder="Rua, número, bairro"></div>
+      <div class="form-group"><label>Cidade</label><input id="p-cidade" placeholder="Brasília"></div>
+      <div class="form-group"><label>Estado</label><select id="p-estado"><option>DF</option><option>SP</option><option>RJ</option><option>MG</option><option>GO</option><option>BA</option><option>Outro</option></select></div>
+      <div class="form-group"><label>Clínica Vinculada</label><select id="p-clinica"></select></div>
+      <div class="form-group"><label>Acompanhante</label><input id="p-acomp" placeholder="Nome do acompanhante"></div>
+      <div class="form-group full"><label>Observações Médicas</label><textarea id="p-obs" placeholder="Condições especiais, alergias, necessidades..."></textarea></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal('modal-pac')">Cancelar</button>
+      <button class="btn btn-primary" onclick="criarPaciente()">Salvar Paciente</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadPacientes(){
+  const d = await api('/api/pacientes');
+  const tbody = document.getElementById('tbody-pac');
+  if(!d.pacientes?.length){ tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">Nenhum paciente cadastrado</td></tr>'; return; }
+  tbody.innerHTML = d.pacientes.map(p=>`
+    <tr>
+      <td>${p.id}</td><td><strong>${p.nome}</strong></td>
+      <td>${p.cpf||'—'}</td><td>${p.telefone||'—'}</td>
+      <td>${p.cidade||'—'}</td><td>${p.clinica_nome||'—'}</td>
+      <td>${p.acompanhante||'—'}</td>
+      <td><button class="btn btn-sm btn-danger" onclick="deletar(${p.id})">🗑</button></td>
+    </tr>`).join('');
+}
+async function loadClinicas(){
+  const d = await api('/api/clinicas');
+  document.getElementById('p-clinica').innerHTML =
+    '<option value="">Sem vínculo</option>' +
+    (d.clinicas||[]).map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
+}
+async function criarPaciente(){
+  const body={nome:document.getElementById('p-nome').value,cpf:document.getElementById('p-cpf').value,
+    telefone:document.getElementById('p-tel').value,endereco:document.getElementById('p-end').value,
+    cidade:document.getElementById('p-cidade').value,estado:document.getElementById('p-estado').value,
+    clinica_id:document.getElementById('p-clinica').value||null,
+    acompanhante:document.getElementById('p-acomp').value,
+    observacoes:document.getElementById('p-obs').value};
+  if(!body.nome){toast('Informe o nome','error');return;}
+  const d=await api('/api/pacientes','POST',body);
+  if(d.ok){toast('Paciente cadastrado!','success');closeModal('modal-pac');loadPacientes();}
+  else toast('Erro: '+d.error,'error');
+}
+async function deletar(id){
+  if(!confirm('Remover este paciente?'))return;
+  const d=await api(`/api/pacientes/${id}`,'DELETE');
+  if(d.ok){toast('Removido','info');loadPacientes();}
+}
+loadClinicas(); loadPacientes();
+</script>
+{% endblock %}
