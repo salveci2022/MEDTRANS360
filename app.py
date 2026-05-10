@@ -857,8 +857,14 @@ def e500(e):
     log.exception("Erro 500")
     return render_template('login.html', erro='Erro interno. Tente novamente.'), 500
 
-if __name__ == '__main__':
+# Inicializar banco SEMPRE — tanto gunicorn quanto direto
+try:
     init_db()
+    log.info("Banco MEDTRANS 360 inicializado com sucesso.")
+except Exception as _e:
+    log.error(f"Erro ao inicializar banco: {_e}")
+
+if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     debug = os.environ.get('FLASK_DEBUG','false').lower() == 'true'
     app.run(host='0.0.0.0', port=port, debug=debug)
