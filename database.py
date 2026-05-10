@@ -1,8 +1,8 @@
 """
-MEDTRANS 360 — Camada de banco de dados SQLite
-Persistência completa para produção
+MEDTRANS 360 — Banco de dados SQLite
+Versão 2.0 — RBAC completo com painéis separados
 """
-import sqlite3, os, json
+import sqlite3, os, hashlib
 from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -17,6 +17,8 @@ def get_conn():
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
+def _h(s): return hashlib.sha256(s.encode()).hexdigest()
+
 def init_db():
     with get_conn() as conn:
         conn.executescript("""
@@ -27,6 +29,7 @@ def init_db():
             senha_hash  TEXT NOT NULL,
             perfil      TEXT DEFAULT 'operador',
             clinica_id  INTEGER,
+            motorista_id INTEGER,
             ativo       INTEGER DEFAULT 1,
             created_at  TEXT DEFAULT (datetime('now','localtime'))
         );
@@ -129,21 +132,30 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_pacientes_clinica  ON pacientes(clinica_id);
         CREATE INDEX IF NOT EXISTS idx_motoristas_status  ON motoristas(status);
         """)
-        # Seed: admin padrão
-        cur = conn.execute("SELECT id FROM users WHERE email='admin@medtrans360.com.br'")
-        if not cur.fetchone():
-            import hashlib
-            h = hashlib.sha256(b'Admin@2025!').hexdigest()
-            conn.execute("""INSERT INTO users (nome,email,senha_hash,perfil)
-                VALUES ('Administrador','admin@medtrans360.com.br',?,'master')""", (h,))
-            # Seed clínica demo
-            conn.execute("""INSERT INTO clinicas (nome,cnpj,responsavel,telefone,cidade,estado)
-                VALUES ('Clínica Demo MEDTRANS','00.000.000/0001-00','Dr. Demo','(61) 99999-0000','Brasília','DF')""")
-            conn.commit()
-    print("✅ Banco MEDTRANS 360 inicializado")
 
-def now_str():
-    return datetime.now(TZ).strftime('%d/%m/%Y %H:%M:%S')
+        # Seed usuários demo
+        demos = [
+            ('Administrador Master', 'admin@medtrans360.com.br',   _h('Admin@2025!'),   'master',   None, None),
+            ('Operador Central',     'operador@medtrans360.com.br', _h('Oper@2025!'),    'operador', None, None),
+            ('Clínica São Lucas',    'clinica@medtrans360.com.br',  _h('Clinica@2025!'), 'clinica',  None, None),
+            ('Motorista João',       'motorista@medtrans360.com.br',_h('Motor@2025!'),   'motorista',None, None),
+        ]
+        for nome, email, senha, perfil, cid, mid in demos:
+            cur = conn.execute("SELECT id FROM users WHERE email=?", (email,))
+            if not cur.fetchone():
+                conn.execute(
+                    "INSERT INTO users(nome,email,senha_hash,perfil,clinica_id,motorista_id) VALUES(?,?,?,?,?,?)",
+                    (nome, email, senha, perfil, cid, mid)
+                )
+
+        # Seed clínica demo
+        cur = conn.execute("SELECT id FROM clinicas WHERE nome='Clínica São Lucas Demo'")
+        if not cur.fetchone():
+            conn.execute("""INSERT INTO clinicas(nome,cnpj,responsavel,telefone,cidade,estado)
+                VALUES('Clínica São Lucas Demo','00.000.000/0001-00','Dr. Demo','(61) 99999-0000','Brasília','DF')""")
+
+        conn.commit()
+    print("✅ Banco MEDTRANS 360 v2 inicializado")
 
 def audit(usuario, acao, detalhes='', ip=''):
     with get_conn() as conn:

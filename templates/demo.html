@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Demonstração — MEDTRANS 360</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--blue:#0066ff;--green:#00c37a;--amber:#f59e0b;--red:#ff4757;--black:#060c18;--dark:#0a1228;--card:#0d1830;--text:#e8f0fe;--muted:#6b7fa3;--border:rgba(255,255,255,.07)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--black);color:var(--text)}
+nav{display:flex;align-items:center;justify-content:space-between;padding:14px 32px;background:rgba(6,12,24,.9);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;backdrop-filter:blur(20px)}
+.brand{font-family:'Syne',sans-serif;font-weight:800;font-size:18px;background:linear-gradient(135deg,var(--blue),#00e5ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.demo-badge{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:var(--amber);font-size:12px;font-weight:600;padding:5px 14px;border-radius:999px}
+.btn-cta{background:linear-gradient(135deg,var(--blue),#7b42f6);color:#fff;border:0;border-radius:10px;padding:9px 20px;font-size:14px;font-weight:500;cursor:pointer;text-decoration:none;font-family:'DM Sans',sans-serif}
+.notice{text-align:center;padding:10px;background:linear-gradient(90deg,rgba(245,158,11,.08),rgba(245,158,11,.04));border-bottom:1px solid rgba(245,158,11,.15);font-size:13px;color:var(--amber)}
+.layout{display:grid;grid-template-columns:1fr 1fr;min-height:calc(100vh - 90px)}
+.panel{padding:28px 24px;border-right:1px solid var(--border)}
+.panel-title{font-family:'Syne',sans-serif;font-size:.9rem;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:16px}
+.card{background:var(--dark);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px}
+.form-group{margin-bottom:14px}
+label{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px}
+input,select,textarea{width:100%;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:15px;font-family:'DM Sans',sans-serif;outline:none}
+input:focus,select:focus{border-color:rgba(0,102,255,.4)}
+textarea{resize:none;height:70px}
+.btn-solicitar{width:100%;padding:14px;background:linear-gradient(135deg,var(--blue),#7b42f6);color:#fff;border:0;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:4px;transition:all .2s}
+.btn-solicitar:hover{box-shadow:0 8px 24px rgba(0,102,255,.3);transform:translateY(-1px)}
+.btn-cenario{width:100%;padding:10px 14px;background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--text);border-radius:10px;font-size:14px;font-family:'DM Sans',sans-serif;cursor:pointer;text-align:left;margin-bottom:8px;transition:all .2s}
+.btn-cenario:hover{background:rgba(255,255,255,.08)}
+.central-panel{padding:28px 24px}
+.status-bar{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--dark);border:1px solid var(--border);border-radius:12px;margin-bottom:16px}
+.status-online{display:flex;align-items:center;gap:10px}
+.dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.dot.ok{background:var(--green);animation:pulse 2s infinite}
+.dot.alert{background:var(--red);animation:pulse .8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.stat-box{background:var(--dark);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center}
+.stat-num{font-family:'Syne',sans-serif;font-size:1.8rem;font-weight:800}
+.stat-lbl{font-size:11px;color:var(--muted);margin-top:3px;text-transform:uppercase;letter-spacing:.5px}
+.alertas-area{background:var(--dark);border:1px solid var(--border);border-radius:14px;padding:18px}
+.alertas-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.alertas-title{font-family:'Syne',sans-serif;font-size:.95rem;font-weight:700}
+.btn-limpar{background:none;border:1px solid var(--border);color:var(--text);border-radius:8px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif}
+.alertas-list{max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+.alerta-item{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;gap:10px;align-items:flex-start;animation:slideIn .3s ease}
+@keyframes slideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+.alerta-item.ativo{border-color:rgba(255,71,87,.3);background:rgba(255,71,87,.04)}
+.alerta-item.resolvido{opacity:.5}
+.alerta-dot-item{width:8px;height:8px;border-radius:50%;margin-top:4px;flex-shrink:0}
+.alerta-dot-item.a{background:var(--red);animation:pulse 1.5s infinite}
+.alerta-dot-item.r{background:var(--green)}
+.alerta-tipo{font-size:13px;font-weight:600;margin-bottom:2px}
+.alerta-meta{font-size:12px;color:var(--muted)}
+.alerta-time{font-size:11px;color:var(--muted);flex-shrink:0}
+.alerta-acoes{display:flex;gap:6px;margin-top:6px}
+.btn-resolver{font-size:12px;padding:4px 10px;border-radius:6px;border:0;background:rgba(0,195,122,.15);color:var(--green);cursor:pointer;font-family:'DM Sans',sans-serif}
+.empty-state{text-align:center;padding:40px 20px;color:var(--muted)}
+.empty-state .ei{font-size:36px;margin-bottom:12px;opacity:.3}
+@media(max-width:860px){.layout{grid-template-columns:1fr}.panel{border-right:0;border-bottom:1px solid var(--border)}}
+</style>
+</head>
+<body>
+<nav>
+  <div class="brand">MEDTRANS 360</div>
+  <div class="demo-badge">Modo Demonstração</div>
+  <a href="/login" class="btn-cta">Acessar sistema real</a>
+</nav>
+<div class="notice">Demonstração interativa — nenhum dado real é enviado ou armazenado.</div>
+<div class="layout">
+  <div class="panel">
+    <div class="panel-title">Solicitação de Transporte</div>
+    <div class="card">
+      <div class="form-group"><label>Paciente</label><input id="d-pac" value="Maria das Graças Silva"></div>
+      <div class="form-group"><label>Tipo de transporte</label>
+        <select id="d-tipo"><option>Hemodiálise</option><option>Consulta médica</option><option>Fisioterapia</option><option>Exame</option><option>Alta hospitalar</option></select>
+      </div>
+      <div class="form-group"><label>Origem</label><input id="d-orig" value="Quadra 12, Guará II — Brasília"></div>
+      <div class="form-group"><label>Destino</label><input id="d-dest" value="Clínica São Lucas — Asa Norte"></div>
+      <div class="form-group"><label>Observações</label><textarea id="d-obs">Paciente usa cadeira de rodas. Necessita auxílio para embarque.</textarea></div>
+      <button class="btn-solicitar" onclick="solicitarDemo()">Solicitar Transporte Agora</button>
+    </div>
+    <div class="panel-title" style="margin-top:8px">Cenários rápidos</div>
+    <button class="btn-cenario" onclick="cenario('hemodialise')">Hemodiálise 3x por semana</button>
+    <button class="btn-cenario" onclick="cenario('alta')">Alta hospitalar urgente</button>
+    <button class="btn-cenario" onclick="cenario('fisio')">Fisioterapia pós-cirurgia</button>
+    <button class="btn-cenario" onclick="limparDemo()">Limpar demonstração</button>
+  </div>
+  <div class="central-panel">
+    <div class="panel-title">Central de Monitoramento</div>
+    <div class="status-bar">
+      <div class="status-online"><div class="dot ok" id="status-dot"></div><div><div id="status-txt" style="font-size:14px;font-weight:500">Sistema normal</div><div id="status-sub" style="font-size:12px;color:var(--muted)">Aguardando solicitações</div></div></div>
+    </div>
+    <div class="stats-row">
+      <div class="stat-box"><div class="stat-num" id="s-total" style="color:var(--blue)">0</div><div class="stat-lbl">Total</div></div>
+      <div class="stat-box"><div class="stat-num" id="s-ativos" style="color:var(--red)">0</div><div class="stat-lbl">Ativos</div></div>
+      <div class="stat-box"><div class="stat-num" id="s-res" style="color:var(--green)">0</div><div class="stat-lbl">Resolvidos</div></div>
+    </div>
+    <div class="alertas-area">
+      <div class="alertas-header">
+        <div class="alertas-title">Solicitações em tempo real</div>
+        <button class="btn-limpar" onclick="limparDemo()">Limpar</button>
+      </div>
+      <div class="alertas-list" id="alertas-list">
+        <div class="empty-state"><div class="ei">🚑</div><div>Use o formulário para simular uma solicitação</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+let alertas = [];
+function atualizar(){
+  const total=alertas.length, ativos=alertas.filter(a=>!a.resolvido).length, res=total-ativos;
+  document.getElementById('s-total').textContent=total;
+  document.getElementById('s-ativos').textContent=ativos;
+  document.getElementById('s-res').textContent=res;
+  const dot=document.getElementById('status-dot');
+  const stxt=document.getElementById('status-txt');
+  const ssub=document.getElementById('status-sub');
+  if(ativos>0){dot.className='dot alert';stxt.textContent=`${ativos} solicitação(ões) ativa(s)`;ssub.textContent='Requer atenção imediata';}
+  else{dot.className='dot ok';stxt.textContent='Sistema normal';ssub.textContent=total>0?`${total} no histórico`:'Aguardando solicitações';}
+  const list=document.getElementById('alertas-list');
+  if(!alertas.length){list.innerHTML='<div class="empty-state"><div class="ei">🚑</div><div>Use o formulário para simular uma solicitação</div></div>';return;}
+  list.innerHTML=alertas.map(a=>`
+    <div class="alerta-item ${a.resolvido?'resolvido':'ativo'}">
+      <div class="alerta-dot-item ${a.resolvido?'r':'a'}"></div>
+      <div style="flex:1">
+        <div class="alerta-tipo">${a.tipo} — ${a.paciente}</div>
+        <div class="alerta-meta">${a.origem} → ${a.destino}</div>
+        ${a.obs?`<div class="alerta-meta" style="font-style:italic">"${a.obs.slice(0,60)}..."</div>`:''}
+        <div class="alerta-acoes">
+          ${!a.resolvido?`<button class="btn-resolver" onclick="resolver(${a.id})">Confirmar atendimento</button>`:'<span style="font-size:12px;color:var(--green)">✓ Atendido</span>'}
+        </div>
+      </div>
+      <div class="alerta-time">${a.hora}</div>
+    </div>`).join('');
+}
+function solicitarDemo(){
+  const now=new Date();
+  alertas.unshift({id:Date.now(),paciente:document.getElementById('d-pac').value||'Paciente',tipo:document.getElementById('d-tipo').value,origem:document.getElementById('d-orig').value||'Origem',destino:document.getElementById('d-dest').value||'Destino',obs:document.getElementById('d-obs').value,hora:now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),resolvido:false});
+  atualizar();
+}
+function resolver(id){const a=alertas.find(x=>x.id===id);if(a)a.resolvido=true;atualizar();}
+function limparDemo(){alertas=[];atualizar();}
+function cenario(tipo){
+  const c={hemodialise:{pac:'João Pereira, 68 anos',tipo:'Hemodiálise',orig:'SQN 307, Asa Norte',dest:'Clínica Renal Vida — Asa Sul',obs:'Diálise 3x/semana. Paciente debilitado.'},alta:{pac:'Ana Lucia Ferreira',tipo:'Alta hospitalar',orig:'Hospital Regional do Gama',dest:'QR 407 — Samambaia Sul',obs:'Alta após cirurgia de quadril. Maca necessária.'},fisio:{pac:'Carlos Mendonça, 45 anos',tipo:'Fisioterapia',orig:'Rua 10 — Ceilândia Norte',dest:'Centro de Reabilitação Brasília',obs:'Pós-operatório joelho. Bengala.'}};
+  const s=c[tipo];
+  document.getElementById('d-pac').value=s.pac;document.getElementById('d-tipo').value=s.tipo;document.getElementById('d-orig').value=s.orig;document.getElementById('d-dest').value=s.dest;document.getElementById('d-obs').value=s.obs;
+  setTimeout(solicitarDemo,300);
+}
+atualizar();
+</script>
+</body>
+</html>

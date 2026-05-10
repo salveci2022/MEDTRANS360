@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Clínica — MEDTRANS 360{% endblock %}</title>
+<meta name="theme-color" content="#0066ff">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--blue:#0066ff;--green:#00c37a;--cyan:#00e5ff;--purple:#7b42f6;--orange:#ff6a00;--red:#ff4757;--amber:#f59e0b;--black:#060c18;--dark:#0a1228;--card:#0d1830;--text:#e8f0fe;--muted:#6b7fa3;--border:rgba(255,255,255,.07)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--black);color:var(--text);min-height:100vh}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:var(--dark);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
+.brand{font-family:'Syne',sans-serif;font-weight:800;font-size:18px;background:linear-gradient(135deg,var(--blue),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.perfil-badge{background:rgba(0,102,255,.12);border:1px solid rgba(0,102,255,.25);color:var(--blue);font-size:12px;font-weight:600;padding:4px 12px;border-radius:999px}
+.user-info{display:flex;align-items:center;gap:10px}
+.user-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--purple));display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:#fff}
+.user-name{font-size:13px;font-weight:500}.user-role{font-size:11px;color:var(--muted)}
+.topbar-right{display:flex;align-items:center;gap:12px}
+.btn-logout{background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:6px 14px;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s}
+.btn-logout:hover{background:rgba(255,71,87,.1);color:var(--red)}
+.content{padding:20px;max-width:1200px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:20px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;position:relative;overflow:hidden}
+.stat-card::before{content:"";position:absolute;top:0;left:0;right:0;height:2px}
+.stat-card.c-blue::before{background:var(--blue)}.stat-card.c-green::before{background:var(--green)}.stat-card.c-amber::before{background:var(--amber)}.stat-card.c-purple::before{background:var(--purple)}
+.stat-label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px}
+.stat-value{font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;line-height:1}
+.stat-sub{font-size:12px;color:var(--muted);margin-top:4px}
+.cv-blue{color:var(--blue)}.cv-green{color:var(--green)}.cv-amber{color:var(--amber)}.cv-purple{color:var(--purple)}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:9px 18px;border-radius:10px;border:0;font-size:14px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;min-height:44px}
+.btn-primary{background:linear-gradient(135deg,var(--blue),var(--purple));color:#fff;box-shadow:0 6px 20px rgba(0,102,255,.2)}
+.btn-success{background:linear-gradient(135deg,var(--green),#009960);color:#060c18}
+.btn-danger{background:rgba(255,71,87,.15);color:var(--red);border:1px solid rgba(255,71,87,.3)}
+.btn-ghost{background:rgba(255,255,255,.05);color:var(--text);border:1px solid var(--border)}
+.btn-sm{padding:7px 14px;font-size:13px;min-height:36px}
+.table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse}
+thead tr{background:rgba(255,255,255,.03)}
+th{padding:10px 14px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:600;white-space:nowrap}
+td{padding:10px 14px;font-size:13px;border-top:1px solid var(--border)}
+tr:hover td{background:rgba(255,255,255,.02)}
+.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600}
+.badge-green{background:rgba(0,195,122,.15);color:var(--green)}.badge-blue{background:rgba(0,102,255,.15);color:var(--blue)}.badge-amber{background:rgba(245,158,11,.15);color:var(--amber)}.badge-red{background:rgba(255,71,87,.15);color:var(--red)}.badge-gray{background:rgba(107,127,163,.15);color:var(--muted)}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:1000;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:28px;width:min(560px,95vw);max-height:90vh;overflow-y:auto;animation:modalIn .25s ease}
+@keyframes modalIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+.modal-title{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:700;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center}
+.modal-close{background:none;border:0;color:var(--muted);font-size:20px;cursor:pointer}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-group.full{grid-column:1/-1}
+label{font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+input,select,textarea{background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-size:16px;font-family:'DM Sans',sans-serif;outline:none;width:100%}
+input:focus,select:focus{border-color:rgba(0,102,255,.5)}
+textarea{resize:vertical;min-height:80px}
+.toast-container{position:fixed;bottom:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:12px;border:1px solid;font-size:14px;animation:toastIn .3s ease;min-width:260px}
+@keyframes toastIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.toast.success{background:rgba(0,195,122,.12);border-color:rgba(0,195,122,.3);color:var(--green)}
+.toast.error{background:rgba(255,71,87,.12);border-color:rgba(255,71,87,.3);color:var(--red)}
+.toast.info{background:rgba(0,102,255,.12);border-color:rgba(0,102,255,.3);color:var(--blue)}
+.loading{display:flex;align-items:center;justify-content:center;height:100px;color:var(--muted);gap:10px}
+.spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:600px){.form-grid{grid-template-columns:1fr}.topbar{padding:10px 14px}}
+</style>
+{% block extra_head %}{% endblock %}
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">MEDTRANS 360</div>
+  <div class="topbar-right">
+    <div class="user-info">
+      <div class="user-avatar">{{ usuario.nome[0].upper() if usuario else 'C' }}</div>
+      <div><div class="user-name">{{ usuario.nome if usuario else 'Clínica' }}</div><div class="user-role">Painel da Clínica</div></div>
+    </div>
+    <span class="perfil-badge">Clínica</span>
+    <button class="btn-logout" onclick="location.href='/logout'">Sair</button>
+  </div>
+</div>
+<div class="content">
+  <h2 style="font-family:'Syne',sans-serif;font-size:1.2rem;font-weight:700;margin-bottom:20px">{% block page_title %}{% endblock %}</h2>
+  {% block content %}{% endblock %}
+</div>
+<div class="toast-container" id="toasts"></div>
+<script>
+function toast(msg, type='info'){
+  const el=document.createElement('div'); el.className=`toast ${type}`;
+  el.innerHTML=`<span>${type==='success'?'✓':type==='error'?'✕':'i'}</span><span>${msg}</span>`;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(()=>el.remove(),4000);
+}
+async function api(url,method='GET',body=null){
+  const opts={method,headers:{'Content-Type':'application/json'}};
+  if(body) opts.body=JSON.stringify(body);
+  const r=await fetch(url,opts); return r.json();
+}
+function closeModal(id){document.getElementById(id).classList.remove('open')}
+function openModal(id){document.getElementById(id).classList.add('open')}
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

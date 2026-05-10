@@ -13,7 +13,7 @@ from functools import wraps
 from collections import defaultdict
 import time
 
-from database import init_db, get_conn, audit, now_str
+from database import init_db, get_conn, audit
 
 app = Flask(__name__)
 SECRET_KEY = os.environ.get('SECRET_KEY', secrets.token_hex(32))
@@ -66,6 +66,22 @@ def login_required(f):
         return f(*a, **kw)
     return dec
 
+
+def require_perfis(*perfis):
+    """Permite acesso apenas aos perfis especificados."""
+    def decorator(f):
+        @wraps(f)
+        def decorated(*a, **kw):
+            if not session.get('user_id'):
+                return redirect(url_for('login'))
+            if session.get('perfil') not in perfis:
+                return render_template('acesso_negado.html',
+                    perfil_atual=session.get('perfil'),
+                    perfis_permitidos=perfis), 403
+            return f(*a, **kw)
+        return decorated
+    return decorator
+
 def master_required(f):
     @wraps(f)
     def dec(*a, **kw):
@@ -96,7 +112,19 @@ def clinica_filter():
 @app.route('/')
 def index():
     if session.get('user_id'):
-        return redirect(url_for('dashboard'))
+        perfil = session.get('perfil', '')
+        if perfil == 'motorista':
+            return redirect(url_for('painel_motorista'))
+        elif perfil == 'clinica':
+            return redirect(url_for('painel_clinica'))
+        else:
+            perfil = u['perfil']
+        if perfil == 'motorista':
+            return redirect(url_for('painel_motorista'))
+        elif perfil == 'clinica':
+            return redirect(url_for('painel_clinica'))
+        else:
+            return redirect(url_for('dashboard'))
     return render_template('landing.html')
 
 @app.route('/login', methods=['GET','POST'])
@@ -124,7 +152,13 @@ def login():
         session['clinica_id']= u['clinica_id']
         audit(u['email'], 'LOGIN', '', ip)
         log.info(f"Login: {email} [{u['perfil']}]")
-        return redirect(url_for('dashboard'))
+        perfil = u['perfil']
+        if perfil == 'motorista':
+            return redirect(url_for('painel_motorista'))
+        elif perfil == 'clinica':
+            return redirect(url_for('painel_clinica'))
+        else:
+            return redirect(url_for('dashboard'))
     return render_template('login.html', erro=None)
 
 @app.route('/logout')
@@ -132,6 +166,67 @@ def logout():
     audit(session.get('email',''), 'LOGOUT', '', get_ip())
     session.clear()
     return redirect(url_for('login'))
+
+
+# ════════════════════════════════════════════════
+#  PAINÉIS SEPARADOS POR PERFIL
+# ════════════════════════════════════════════════
+@app.route('/motorista')
+@require_perfis('motorista','master','operador')
+def painel_motorista():
+    return render_template('painel_motorista.html', usuario=usuario_atual())
+
+@app.route('/clinica-painel')
+@require_perfis('clinica','master','operador')
+def painel_clinica():
+    return render_template('painel_clinica.html', usuario=usuario_atual())
+
+# API exclusiva para motorista — vê apenas SUAS corridas
+@app.route('/api/motorista/minhas-corridas')
+@require_perfis('motorista','master','operador')
+def api_minhas_corridas():
+    uid = session.get('user_id')
+    perfil = session.get('perfil')
+    with get_conn() as conn:
+        # Busca motorista vinculado ao usuário
+        if perfil == 'motorista':
+            mot = conn.execute(
+                "SELECT id,status FROM motoristas WHERE nome=(SELECT nome FROM users WHERE id=?) AND ativo=1 LIMIT 1",
+                (uid,)).fetchone()
+            if not mot:
+                return jsonify({'ok': True, 'corridas': [], 'status': 'offline',
+                                'msg': 'Nenhum motorista vinculado ao seu usuário'})
+            mid = mot['id']
+            status = mot['status']
+            corridas = [dict(r) for r in conn.execute("""
+                SELECT c.*, p.nome as paciente_nome
+                FROM corridas c
+                LEFT JOIN pacientes p ON c.paciente_id=p.id
+                WHERE c.motorista_id=? AND c.status NOT IN ('cancelada')
+                ORDER BY c.id DESC LIMIT 50
+            """, (mid,)).fetchall()]
+        else:
+            status = 'online'
+            corridas = [dict(r) for r in conn.execute("""
+                SELECT c.*, p.nome as paciente_nome
+                FROM corridas c
+                LEFT JOIN pacientes p ON c.paciente_id=p.id
+                ORDER BY c.id DESC LIMIT 50
+            """).fetchall()]
+    return jsonify({'ok': True, 'corridas': corridas, 'status': status})
+
+# API para motorista alterar PRÓPRIO status
+@app.route('/api/motorista/status', methods=['POST'])
+@require_perfis('motorista','master')
+def api_meu_status():
+    uid = session.get('user_id')
+    status = sanitize((request.get_json() or {}).get('status','offline'))
+    if status not in ('online','offline'): return jsonify({'ok': False}), 400
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE motoristas SET status=? WHERE nome=(SELECT nome FROM users WHERE id=?) AND ativo=1",
+            (status, uid))
+    return jsonify({'ok': True, 'status': status})
 
 @app.route('/demo')
 def demo():
@@ -141,7 +236,7 @@ def demo():
 #  DASHBOARD
 # ════════════════════════════════════════════════
 @app.route('/dashboard')
-@login_required
+@require_perfis('master','operador')
 def dashboard():
     return render_template('dashboard.html', usuario=usuario_atual())
 
@@ -205,7 +300,7 @@ def dashboard_stats():
 #  PACIENTES
 # ════════════════════════════════════════════════
 @app.route('/pacientes')
-@login_required
+@require_perfis('master','operador')
 def pacientes():
     return render_template('pacientes.html', usuario=usuario_atual())
 
@@ -277,7 +372,7 @@ def api_pacientes_delete(pid):
 #  MOTORISTAS
 # ════════════════════════════════════════════════
 @app.route('/motoristas')
-@login_required
+@require_perfis('master','operador')
 def motoristas():
     return render_template('motoristas.html', usuario=usuario_atual())
 
@@ -346,7 +441,7 @@ def api_motoristas_delete(mid):
 #  CLÍNICAS
 # ════════════════════════════════════════════════
 @app.route('/clinicas')
-@login_required
+@require_perfis('master','operador')
 def clinicas():
     return render_template('clinicas.html', usuario=usuario_atual())
 
@@ -383,7 +478,7 @@ def api_clinicas_create():
 #  CORRIDAS
 # ════════════════════════════════════════════════
 @app.route('/corridas')
-@login_required
+@require_perfis('master','operador')
 def corridas():
     return render_template('corridas.html', usuario=usuario_atual())
 
@@ -472,7 +567,7 @@ def api_corrida_delete(rid):
 #  FINANCEIRO
 # ════════════════════════════════════════════════
 @app.route('/financeiro')
-@login_required
+@require_perfis('master','operador')
 def financeiro():
     return render_template('financeiro.html', usuario=usuario_atual())
 

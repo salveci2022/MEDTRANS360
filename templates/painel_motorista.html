@@ -1,0 +1,149 @@
+{% extends "base_motorista.html" %}
+{% block title %}Painel do Motorista — MEDTRANS 360{% endblock %}
+{% block page_title %}Minhas Corridas{% endblock %}
+{% block content %}
+<div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">
+  <div class="stat-card c-blue"><div class="stat-label">Hoje</div><div class="stat-value cv-blue" id="m-hoje">0</div><div class="stat-sub">Corridas agendadas</div></div>
+  <div class="stat-card c-amber"><div class="stat-label">Em Andamento</div><div class="stat-value cv-amber" id="m-andamento">0</div><div class="stat-sub">Corridas ativas</div></div>
+  <div class="stat-card c-green"><div class="stat-label">Finalizadas</div><div class="stat-value cv-green" id="m-finalizadas">0</div><div class="stat-sub">Total do mês</div></div>
+</div>
+
+<div class="card" style="margin-bottom:20px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+    <h3 style="font-family:'Syne',sans-serif;font-size:1rem;font-weight:700">Minhas corridas de hoje</h3>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost btn-sm" onclick="loadMinhasCorridas()">Atualizar</button>
+      <button class="btn btn-success btn-sm" onclick="toggleMeuStatus()">
+        <span id="status-txt">Ficar Online</span>
+      </button>
+    </div>
+  </div>
+  <div id="status-bar" style="display:none;padding:10px 14px;border-radius:10px;margin-bottom:12px;font-size:13px;align-items:center;gap:8px">
+    <span id="status-dot" style="width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block"></span>
+    <span id="status-label"></span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Paciente</th><th>Tipo</th><th>Data</th><th>Origem</th><th>Destino</th><th>Status</th><th>Ações</th></tr></thead>
+      <tbody id="tbody-motorista"><tr><td colspan="8"><div class="loading"><div class="spinner"></div></div></td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal iniciar corrida -->
+<div class="modal-overlay" id="modal-iniciar">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title">Iniciar Corrida <button class="modal-close" onclick="closeModal('modal-iniciar')">✕</button></div>
+    <div class="form-group">
+      <label>KM atual do veículo</label>
+      <input type="number" id="km-ini" placeholder="Ex: 45000" step="0.1">
+    </div>
+    <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal('modal-iniciar')">Cancelar</button>
+      <button class="btn btn-success" onclick="confirmarIniciar()">Iniciar agora</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal finalizar corrida -->
+<div class="modal-overlay" id="modal-finalizar">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title">Finalizar Corrida <button class="modal-close" onclick="closeModal('modal-finalizar')">✕</button></div>
+    <div class="form-group">
+      <label>KM final do veículo</label>
+      <input type="number" id="km-fim" placeholder="Ex: 45080" step="0.1">
+    </div>
+    <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeModal('modal-finalizar')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarFinalizar()">Finalizar</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const STATUS_BADGES={agendada:'badge-blue',em_andamento:'badge-amber',finalizada:'badge-green',cancelada:'badge-red'};
+const STATUS_LABELS={agendada:'Agendada',em_andamento:'Em Andamento',finalizada:'Finalizada',cancelada:'Cancelada'};
+let currentRid = null;
+let meuStatus = 'offline';
+
+async function loadMinhasCorridas(){
+  const d = await api('/api/motorista/minhas-corridas');
+  if(!d.ok) return;
+
+  // Stats
+  const hoje = d.corridas.filter(c=>c.data_agendada===new Date().toLocaleDateString('pt-BR').split('/').reverse().join('-')||c.status==='agendada').length;
+  const andamento = d.corridas.filter(c=>c.status==='em_andamento').length;
+  const finalizadas = d.corridas.filter(c=>c.status==='finalizada').length;
+  document.getElementById('m-hoje').textContent = d.corridas.filter(c=>c.status==='agendada').length;
+  document.getElementById('m-andamento').textContent = andamento;
+  document.getElementById('m-finalizadas').textContent = finalizadas;
+
+  // Status do motorista
+  meuStatus = d.status || 'offline';
+  const sb = document.getElementById('status-bar');
+  const sd = document.getElementById('status-dot');
+  const sl = document.getElementById('status-label');
+  const btn = document.getElementById('status-txt');
+  sb.style.display = 'flex';
+  if(meuStatus === 'online'){
+    sb.style.background = 'rgba(0,195,122,.1)'; sb.style.border = '1px solid rgba(0,195,122,.25)';
+    sd.style.background = 'var(--green)'; sl.textContent = 'Você está ONLINE — disponível para corridas';
+    sl.style.color = 'var(--green)'; btn.textContent = 'Ficar Offline';
+    btn.parentElement.className = 'btn btn-danger btn-sm';
+  } else {
+    sb.style.background = 'rgba(107,127,163,.1)'; sb.style.border = '1px solid rgba(107,127,163,.2)';
+    sd.style.background = 'var(--muted)'; sl.textContent = 'Você está OFFLINE — não receberá corridas';
+    sl.style.color = 'var(--muted)'; btn.textContent = 'Ficar Online';
+    btn.parentElement.className = 'btn btn-success btn-sm';
+  }
+
+  const tbody = document.getElementById('tbody-motorista');
+  if(!d.corridas.length){
+    tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">Nenhuma corrida atribuída a você</td></tr>';
+    return;
+  }
+  tbody.innerHTML = d.corridas.map(c=>`
+    <tr>
+      <td><strong>#${c.id}</strong></td>
+      <td>${c.paciente_nome||'—'}</td>
+      <td><span style="font-size:12px;background:rgba(255,255,255,.06);padding:3px 8px;border-radius:6px">${c.tipo||'ida'}</span></td>
+      <td>${c.data_agendada||'—'}</td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.origem||'—'}</td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.destino||'—'}</td>
+      <td><span class="badge ${STATUS_BADGES[c.status]||'badge-gray'}">${STATUS_LABELS[c.status]||c.status}</span></td>
+      <td>
+        <div style="display:flex;gap:4px">
+          ${c.status==='agendada'?`<button class="btn btn-sm btn-success" onclick="iniciarCorrida(${c.id})">Iniciar</button>`:''}
+          ${c.status==='em_andamento'?`<button class="btn btn-sm btn-primary" onclick="finalizarCorrida(${c.id})">Finalizar</button>`:''}
+          <a class="btn btn-sm btn-ghost" href="/relatorio/corrida/${c.id}" target="_blank">PDF</a>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+async function toggleMeuStatus(){
+  const novoStatus = meuStatus === 'online' ? 'offline' : 'online';
+  const d = await api('/api/motorista/status','POST',{status: novoStatus});
+  if(d.ok){ toast(`Status: ${novoStatus.toUpperCase()}`,'success'); loadMinhasCorridas(); }
+}
+
+function iniciarCorrida(rid){ currentRid=rid; document.getElementById('km-ini').value=''; openModal('modal-iniciar'); }
+function finalizarCorrida(rid){ currentRid=rid; document.getElementById('km-fim').value=''; openModal('modal-finalizar'); }
+
+async function confirmarIniciar(){
+  const d = await api(`/api/corridas/${currentRid}/status`,'POST',{status:'em_andamento',km_inicial:parseFloat(document.getElementById('km-ini').value)||0});
+  if(d.ok){ toast('Corrida iniciada!','success'); closeModal('modal-iniciar'); loadMinhasCorridas(); }
+  else toast('Erro: '+d.error,'error');
+}
+
+async function confirmarFinalizar(){
+  const d = await api(`/api/corridas/${currentRid}/status`,'POST',{status:'finalizada',km_final:parseFloat(document.getElementById('km-fim').value)||0});
+  if(d.ok){ toast('Corrida finalizada!','success'); closeModal('modal-finalizar'); loadMinhasCorridas(); }
+  else toast('Erro: '+d.error,'error');
+}
+
+loadMinhasCorridas();
+setInterval(loadMinhasCorridas, 15000);
+</script>
+{% endblock %}
