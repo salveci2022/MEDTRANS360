@@ -980,6 +980,56 @@ def duplicar_corrida(rid):
 def service_worker():
     return send_file('static/sw.js', mimetype='application/javascript')
 
+
+@app.route('/reset-demo-users')
+def reset_demo_users():
+    """Recria os usuários demo — use apenas uma vez após deploy."""
+    import hashlib
+    def h(s): return hashlib.sha256(s.encode()).hexdigest()
+    try:
+        with get_conn() as conn:
+            demos = [
+                ('Administrador Master', 'admin@medtrans360.com.br',    h('Admin@2025!'),    'master'),
+                ('Operador Central',     'operador@medtrans360.com.br',  h('Oper@2025!'),     'operador'),
+                ('Clínica São Lucas',    'clinica@medtrans360.com.br',   h('Clinica@2025!'),  'clinica'),
+                ('Motorista João',       'motorista@medtrans360.com.br', h('Motor@2025!'),    'motorista'),
+            ]
+            for nome, email, senha, perfil in demos:
+                existing = conn.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone()
+                if existing:
+                    conn.execute("UPDATE users SET senha_hash=?, ativo=1 WHERE email=?", (senha, email))
+                else:
+                    conn.execute(
+                        "INSERT INTO users(nome,email,senha_hash,perfil) VALUES(?,?,?,?)",
+                        (nome, email, senha, perfil))
+            conn.commit()
+        return """
+        <html><body style="font-family:Arial;background:#060c18;color:#e8f0fe;
+          display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
+        <div style="text-align:center;max-width:460px;padding:40px;
+          background:#0d1830;border-radius:16px;border:1px solid rgba(255,255,255,.1)">
+          <div style="font-size:48px;margin-bottom:16px">✅</div>
+          <h2 style="color:#0066ff;font-size:1.5rem;margin-bottom:16px">Usuários reconfigurados!</h2>
+          <p style="color:#94a3b8;margin-bottom:24px">Agora você pode fazer login com:</p>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:24px">
+            <tr style="background:rgba(0,102,255,.1)">
+              <th style="padding:8px;text-align:left;color:#0066ff">Email</th>
+              <th style="padding:8px;text-align:left;color:#0066ff">Senha</th>
+              <th style="padding:8px;text-align:left;color:#0066ff">Perfil</th>
+            </tr>
+            <tr><td style="padding:8px;border-top:1px solid rgba(255,255,255,.07)">admin@medtrans360.com.br</td><td style="padding:8px;border-top:1px solid rgba(255,255,255,.07)">Admin@2025!</td><td style="padding:8px;border-top:1px solid rgba(255,255,255,.07);color:#00c37a">Master</td></tr>
+            <tr><td style="padding:8px;border-top:1px solid rgba(255,255,255,.07)">clinica@medtrans360.com.br</td><td style="padding:8px;border-top:1px solid rgba(255,255,255,.07)">Clinica@2025!</td><td style="padding:8px;border-top:1px solid rgba(255,255,255,.07);color:#0066ff">Clínica</td></tr>
+            <tr><td style="padding:8px;border-top:1px solid rgba(255,255,255,.07)">motorista@medtrans360.com.br</td><td style="padding:8px;border-top:1px solid rgba(255,255,255,.07)">Motor@2025!</td><td style="padding:8px;border-top:1px solid rgba(255,255,255,.07);color:#f59e0b">Motorista</td></tr>
+          </table>
+          <a href="/login" style="display:inline-block;background:linear-gradient(135deg,#0066ff,#7b42f6);
+            color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:600">
+            Ir para o Login →
+          </a>
+        </div></body></html>
+        """, 200
+    except Exception as e:
+        return f"<pre style='color:red'>Erro: {e}</pre>", 500
+
 @app.route('/health')
 def health():
     return jsonify({'status':'healthy','app':'MEDTRANS 360','version':'1.0-PRO',
