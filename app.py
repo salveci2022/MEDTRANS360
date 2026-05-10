@@ -976,6 +976,170 @@ def duplicar_corrida(rid):
     audit(session.get('email'), 'CORRIDA_DUPLICADA', f'original={rid} nova={new_id}', get_ip())
     return jsonify({'ok': True, 'id': new_id})
 
+
+# ════════════════════════════════════════════════
+#  API DE ETAPAS DE QUILOMETRAGEM
+# ════════════════════════════════════════════════
+
+ETAPAS_ORDEM = [
+    'saiu_garagem',      # Motorista saiu da garagem/base
+    'chegou_paciente',   # Chegou no endereço do paciente
+    'saiu_paciente',     # Saiu com o paciente
+    'chegou_destino',    # Chegou na clínica/hospital/destino
+    'saiu_destino',      # Saiu do destino (retorno)
+    'chegou_garagem',    # Retornou à garagem — corrida concluída
+]
+
+
+@app.route('/corrida/<int:corrida_id>/km')
+@login_required
+def pagina_km_corrida(corrida_id):
+    return render_template('km_corrida.html',
+                           usuario=usuario_atual(),
+                           corrida_id=corrida_id)
+
+@app.route('/api/corridas/<int:rid>/etapa', methods=['POST'])
+@login_required
+def registrar_etapa(rid):
+    """Registra uma etapa da corrida com o KM do momento."""
+    d = request.get_json() or {}
+    etapa = sanitize(d.get('etapa', ''))
+    km    = float(d.get('km', 0) or 0)
+    now   = datetime.now(TZ).strftime('%H:%M:%S')
+
+    if etapa not in ETAPAS_ORDEM:
+        return jsonify({'ok': False, 'error': f'Etapa inválida: {etapa}'}), 400
+
+    with get_conn() as conn:
+        corr = conn.execute("SELECT * FROM corridas WHERE id=?", (rid,)).fetchone()
+        if not corr:
+            return jsonify({'ok': False, 'error': 'Corrida não encontrada'}), 404
+        corr = dict(corr)
+
+        updates = {'etapa_atual': etapa, 'updated_at': now}
+        calcs   = {}
+
+        if etapa == 'saiu_garagem':
+            updates['km_saida_garagem'] = km
+            updates['hora_saida_garagem'] = now
+            updates['km_inicial'] = km
+            updates['status'] = 'em_andamento'
+
+        elif etapa == 'chegou_paciente':
+            updates['km_chegada_paciente'] = km
+            updates['hora_chegada_paciente'] = now
+            km_gar = float(corr.get('km_saida_garagem') or 0)
+            if km_gar > 0 and km >= km_gar:
+                calcs['km_garagem_paciente'] = round(km - km_gar, 1)
+
+        elif etapa == 'saiu_paciente':
+            updates['km_saida_paciente'] = km
+            updates['hora_saida_paciente'] = now
+
+        elif etapa == 'chegou_destino':
+            updates['km_chegada_destino'] = km
+            updates['hora_chegada_destino'] = now
+            km_sai = float(corr.get('km_saida_paciente') or corr.get('km_chegada_paciente') or 0)
+            if km_sai > 0 and km >= km_sai:
+                calcs['km_com_paciente'] = round(km - km_sai, 1)
+
+        elif etapa == 'saiu_destino':
+            updates['km_saida_destino'] = km
+            updates['hora_saida_destino'] = now
+
+        elif etapa == 'chegou_garagem':
+            updates['km_chegada_garagem'] = km
+            updates['hora_chegada_garagem'] = now
+            updates['km_final'] = km
+            updates['status'] = 'finalizada'
+            updates['hora_chegada'] = now
+
+            # Calcular retorno
+            km_sai_dest = float(corr.get('km_saida_destino') or corr.get('km_chegada_destino') or 0)
+            if km_sai_dest > 0 and km >= km_sai_dest:
+                calcs['km_retorno'] = round(km - km_sai_dest, 1)
+
+            # Total: do início ao fim
+            km_ini = float(corr.get('km_saida_garagem') or corr.get('km_inicial') or 0)
+            if km_ini > 0 and km >= km_ini:
+                km_total = round(km - km_ini, 1)
+                calcs['km_total_corrida'] = km_total
+                calcs['distancia_km'] = km_total
+                updates['distancia_km'] = km_total
+
+        updates.update(calcs)
+
+        # Montar SET clause
+        set_parts = ', '.join(f'{k}=?' for k in updates)
+        vals = list(updates.values()) + [rid]
+        conn.execute(f"UPDATE corridas SET {set_parts} WHERE id=?", vals)
+
+    # Buscar corrida atualizada
+    with get_conn() as conn:
+        corr_upd = dict(conn.execute("SELECT * FROM corridas WHERE id=?", (rid,)).fetchone())
+
+    audit(session.get('email'), f'ETAPA_{etapa.upper()}',
+          f'corrida={rid} km={km}', get_ip())
+
+    return jsonify({
+        'ok': True,
+        'etapa': etapa,
+        'km': km,
+        'resumo': {
+            'km_garagem_paciente': corr_upd.get('km_garagem_paciente', 0),
+            'km_com_paciente':     corr_upd.get('km_com_paciente', 0),
+            'km_retorno':          corr_upd.get('km_retorno', 0),
+            'km_total_corrida':    corr_upd.get('km_total_corrida', 0),
+        },
+        'corrida': corr_upd,
+    })
+
+@app.route('/api/corridas/<int:rid>/km-resumo')
+@login_required
+def km_resumo(rid):
+    """Retorna resumo de quilometragem de uma corrida."""
+    with get_conn() as conn:
+        c = conn.execute("SELECT * FROM corridas WHERE id=?", (rid,)).fetchone()
+        if not c:
+            return jsonify({'ok': False, 'error': 'Não encontrada'}), 404
+        c = dict(c)
+
+    garagem_pac = float(c.get('km_garagem_paciente') or 0)
+    com_pac     = float(c.get('km_com_paciente') or 0)
+    retorno     = float(c.get('km_retorno') or 0)
+    total       = float(c.get('km_total_corrida') or 0)
+
+    # Calcular custo estimado (combustível)
+    with get_conn() as conn:
+        mot = None
+        if c.get('motorista_id'):
+            mot = conn.execute(
+                "SELECT consumo_km FROM motoristas WHERE id=?",
+                (c['motorista_id'],)).fetchone()
+    consumo = float(mot['consumo_km']) if mot else 10.0
+    preco_litro = 5.80  # R$ estimado
+    custo_combustivel = round((total / consumo) * preco_litro, 2) if total > 0 else 0
+
+    return jsonify({
+        'ok': True,
+        'etapas': {
+            'garagem_paciente': {'km': garagem_pac, 'label': 'Garagem → Paciente', 'hora': c.get('hora_saida_garagem','')},
+            'com_paciente':     {'km': com_pac,     'label': 'Paciente → Destino', 'hora': c.get('hora_saida_paciente','')},
+            'retorno':          {'km': retorno,     'label': 'Destino → Garagem',  'hora': c.get('hora_saida_destino','')},
+        },
+        'total_km': total,
+        'custo_combustivel_estimado': custo_combustivel,
+        'consumo_km': consumo,
+        'etapa_atual': c.get('etapa_atual', ''),
+        'status': c.get('status', ''),
+        'km_saida_garagem':    c.get('km_saida_garagem', 0),
+        'km_chegada_paciente': c.get('km_chegada_paciente', 0),
+        'km_saida_paciente':   c.get('km_saida_paciente', 0),
+        'km_chegada_destino':  c.get('km_chegada_destino', 0),
+        'km_saida_destino':    c.get('km_saida_destino', 0),
+        'km_chegada_garagem':  c.get('km_chegada_garagem', 0),
+    })
+
 @app.route('/static/sw.js')
 def service_worker():
     return send_file('static/sw.js', mimetype='application/javascript')

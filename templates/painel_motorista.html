@@ -115,7 +115,12 @@ async function loadMinhasCorridas(){
       <td>
         <div style="display:flex;gap:4px">
           ${c.status==='agendada'?`<button class="btn btn-sm btn-success" onclick="iniciarCorrida(${c.id})">Iniciar</button>`:''}
-          ${c.status==='em_andamento'?`<button class="btn btn-sm btn-primary" onclick="finalizarCorrida(${c.id})">Finalizar</button>`:''}
+          ${['agendada','em_andamento'].includes(c.status)?`
+            <a class="btn btn-sm btn-primary" href="/corrida/${c.id}/km">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              KM
+            </a>`:''}
+          ${c.status==='em_andamento'?`<button class="btn btn-sm btn-ghost" onclick="finalizarCorrida(${c.id})">Finalizar</button>`:''}
           <a class="btn btn-sm btn-ghost" href="/relatorio/corrida/${c.id}" target="_blank">PDF</a>
         </div>
       </td>

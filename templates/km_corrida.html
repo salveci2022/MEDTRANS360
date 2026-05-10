@@ -1,0 +1,224 @@
+{% extends "base_motorista.html" %}
+{% block title %}Controle de KM — MEDTRANS 360{% endblock %}
+{% block page_title %}Controle de Quilometragem{% endblock %}
+{% block extra_head %}
+<style>
+.etapas{display:flex;flex-direction:column;gap:12px;margin-bottom:24px}
+.etapa-item{
+  display:flex;align-items:center;gap:16px;
+  background:var(--dark);border:1px solid var(--border);border-radius:14px;
+  padding:16px 20px;transition:all .3s;position:relative;overflow:hidden;
+}
+.etapa-item.ativa{border-color:var(--blue);background:rgba(0,102,255,.08)}
+.etapa-item.concluida{border-color:var(--green);background:rgba(0,195,122,.06);opacity:.75}
+.etapa-item.bloqueada{opacity:.4;pointer-events:none}
+.etapa-num{
+  width:36px;height:36px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Syne',sans-serif;font-weight:800;font-size:14px;
+  border:2px solid var(--border);color:var(--muted);background:transparent;
+}
+.etapa-item.ativa .etapa-num{border-color:var(--blue);color:var(--blue);background:rgba(0,102,255,.15)}
+.etapa-item.concluida .etapa-num{border-color:var(--green);color:var(--green);background:rgba(0,195,122,.15)}
+.etapa-info{flex:1;min-width:0}
+.etapa-titulo{font-weight:600;font-size:14px;margin-bottom:2px}
+.etapa-sub{font-size:12px;color:var(--muted)}
+.etapa-km{font-family:'Syne',sans-serif;font-weight:800;font-size:1.1rem;color:var(--cyan);flex-shrink:0}
+.etapa-hora{font-size:11px;color:var(--muted);flex-shrink:0}
+.btn-etapa{
+  padding:10px 18px;border-radius:10px;border:0;font-size:14px;font-weight:600;
+  cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;min-height:44px;
+  background:linear-gradient(135deg,var(--blue),var(--purple));color:#fff;
+  white-space:nowrap;flex-shrink:0;
+}
+.btn-etapa:hover{box-shadow:0 6px 20px rgba(0,102,255,.3);transform:translateY(-1px)}
+.btn-etapa.verde{background:linear-gradient(135deg,var(--green),#009960);color:#060c18}
+.btn-etapa.vermelho{background:linear-gradient(135deg,var(--red),#c0392b);color:#fff}
+.resumo-box{
+  background:var(--dark);border:1px solid rgba(0,102,255,.25);border-radius:16px;
+  padding:20px;margin-bottom:20px;
+}
+.resumo-titulo{font-family:'Syne',sans-serif;font-size:.95rem;font-weight:700;margin-bottom:16px;color:var(--cyan)}
+.resumo-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.resumo-item{background:rgba(255,255,255,.04);border-radius:10px;padding:12px}
+.resumo-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.resumo-valor{font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;color:var(--text)}
+.resumo-item.destaque .resumo-valor{color:var(--cyan)}
+.km-input-group{display:flex;gap:10px;align-items:center;margin-top:10px}
+.km-input-group input{flex:1;font-size:18px;font-weight:600;text-align:center;
+  background:rgba(0,102,255,.08);border-color:rgba(0,102,255,.3)}
+.progresso{height:6px;background:rgba(255,255,255,.07);border-radius:999px;overflow:hidden;margin-top:16px}
+.progresso-bar{height:100%;background:linear-gradient(90deg,var(--blue),var(--cyan));border-radius:999px;transition:width .5s ease}
+.corrida-info{background:var(--dark);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:20px}
+.corrida-rota{display:flex;align-items:center;gap:12px;font-size:14px}
+.rota-ponto{flex:1;padding:10px 14px;background:rgba(255,255,255,.04);border-radius:8px}
+.rota-seta{color:var(--muted);font-size:18px;flex-shrink:0}
+.badge-etapa{display:inline-block;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:600;margin-bottom:12px}
+.badge-agendada{background:rgba(0,102,255,.15);color:var(--blue)}
+.badge-em_andamento{background:rgba(245,158,11,.15);color:var(--amber)}
+.badge-finalizada{background:rgba(0,195,122,.15);color:var(--green)}
+</style>
+{% endblock %}
+{% block content %}
+<div id="app-km">
+  <div class="loading"><div class="spinner"></div> Carregando corrida...</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const RID = {{ corrida_id }};
+let corridaData = null;
+
+const ETAPAS = [
+  { id:'saiu_garagem',      num:1, titulo:'Saiu da garagem / base',        sub:'Registre o KM do veículo ao sair',            btn:'Registrar saída',   cor:'verde' },
+  { id:'chegou_paciente',   num:2, titulo:'Chegou no endereço do paciente', sub:'Veículo chegou para buscar o paciente',       btn:'Cheguei no paciente', cor:'' },
+  { id:'saiu_paciente',     num:3, titulo:'Saiu com o paciente',            sub:'Paciente embarcou — registre o KM',           btn:'Paciente embarcou', cor:'' },
+  { id:'chegou_destino',    num:4, titulo:'Chegou no destino',              sub:'Clínica / hospital / consulta',               btn:'Cheguei no destino', cor:'' },
+  { id:'saiu_destino',      num:5, titulo:'Saiu do destino',                sub:'Paciente foi entregue — retornando à base',   btn:'Iniciando retorno', cor:'' },
+  { id:'chegou_garagem',    num:6, titulo:'Retornou à garagem / base',      sub:'Corrida finalizada — registre o KM final',    btn:'Finalizar corrida', cor:'vermelho' },
+];
+
+const ORDEM = ETAPAS.map(e => e.id);
+
+function etapaIndex(etapa) {
+  return ORDEM.indexOf(etapa);
+}
+
+async function loadCorrida() {
+  const [dc, dk] = await Promise.all([
+    api(`/api/corridas?status=`),
+    api(`/api/corridas/${RID}/km-resumo`),
+  ]);
+  if (!dk.ok) { document.getElementById('app-km').innerHTML = '<p style="color:var(--red)">Corrida não encontrada.</p>'; return; }
+  corridaData = dk;
+  renderApp(dk);
+}
+
+function renderApp(d) {
+  const etapaAtual = d.etapa_atual || '';
+  const idxAtual = etapaIndex(etapaAtual);
+  const pct = idxAtual < 0 ? 0 : Math.round(((idxAtual + 1) / ETAPAS.length) * 100);
+  const finalizada = d.status === 'finalizada';
+
+  document.getElementById('app-km').innerHTML = `
+    <div class="corrida-info">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <strong>Corrida #${RID}</strong>
+        <span class="badge-etapa badge-${d.status || 'agendada'}">${{agendada:'Agendada',em_andamento:'Em Andamento',finalizada:'Finalizada'}[d.status] || d.status}</span>
+      </div>
+      <div class="progresso"><div class="progresso-bar" style="width:${pct}%"></div></div>
+      <div style="text-align:right;font-size:12px;color:var(--muted);margin-top:4px">${pct}% concluído</div>
+    </div>
+
+    <div class="resumo-box">
+      <div class="resumo-titulo">Quilometragem por trecho</div>
+      <div class="resumo-grid">
+        <div class="resumo-item">
+          <div class="resumo-label">Garagem → Paciente</div>
+          <div class="resumo-valor">${Number(d.etapas.garagem_paciente.km || 0).toFixed(1)} <small style="font-size:.7rem;color:var(--muted)">km</small></div>
+        </div>
+        <div class="resumo-item">
+          <div class="resumo-label">Paciente → Destino</div>
+          <div class="resumo-valor">${Number(d.etapas.com_paciente.km || 0).toFixed(1)} <small style="font-size:.7rem;color:var(--muted)">km</small></div>
+        </div>
+        <div class="resumo-item">
+          <div class="resumo-label">Retorno à base</div>
+          <div class="resumo-valor">${Number(d.etapas.retorno.km || 0).toFixed(1)} <small style="font-size:.7rem;color:var(--muted)">km</small></div>
+        </div>
+        <div class="resumo-item destaque">
+          <div class="resumo-label">Total percorrido</div>
+          <div class="resumo-valor">${Number(d.total_km || 0).toFixed(1)} <small style="font-size:.7rem;color:var(--muted)">km</small></div>
+        </div>
+      </div>
+      ${d.total_km > 0 ? `
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:13px">
+        <span style="color:var(--muted)">Combustível estimado (${d.consumo_km} km/l × R$5,80/l)</span>
+        <span style="color:var(--amber);font-weight:600">R$ ${Number(d.custo_combustivel_estimado).toFixed(2)}</span>
+      </div>` : ''}
+    </div>
+
+    <div class="etapas" id="etapas-list">
+      ${ETAPAS.map((e, idx) => {
+        const concluida = idxAtual >= idx;
+        const ativa = !finalizada && (idxAtual === idx - 1 || (idxAtual < 0 && idx === 0));
+        const bloqueada = !finalizada && !concluida && !ativa;
+        const kmEtapa = getKmEtapa(e.id, d);
+
+        return `
+        <div class="etapa-item ${concluida ? 'concluida' : ativa ? 'ativa' : 'bloqueada'}" id="etapa-${e.id}">
+          <div class="etapa-num">${concluida ? '✓' : e.num}</div>
+          <div class="etapa-info">
+            <div class="etapa-titulo">${e.titulo}</div>
+            <div class="etapa-sub">${e.sub}</div>
+            ${ativa && !finalizada ? `
+            <div class="km-input-group">
+              <input type="number" id="km-${e.id}" placeholder="Digite o KM atual do veículo" step="0.1" min="0">
+              <button class="btn-etapa ${e.cor}" onclick="registrarEtapa('${e.id}')">
+                ${e.btn}
+              </button>
+            </div>` : ''}
+          </div>
+          ${kmEtapa > 0 ? `<div>
+            <div class="etapa-km">${kmEtapa.toFixed(1)} km</div>
+            <div class="etapa-hora">${getHoraEtapa(e.id, d)}</div>
+          </div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+
+    ${finalizada ? `
+    <div style="text-align:center;padding:20px;background:rgba(0,195,122,.08);border:1px solid rgba(0,195,122,.2);border-radius:14px">
+      <div style="font-size:32px;margin-bottom:8px">✅</div>
+      <div style="font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:700;color:var(--green)">Corrida finalizada com sucesso!</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:4px">Total: ${Number(d.total_km).toFixed(1)} km percorridos</div>
+      <a href="/motorista" class="btn btn-ghost" style="margin-top:14px;display:inline-flex">← Voltar ao painel</a>
+    </div>` : ''}
+  `;
+}
+
+function getKmEtapa(etapa, d) {
+  const mapa = {
+    saiu_garagem: d.km_saida_garagem, chegou_paciente: d.km_chegada_paciente,
+    saiu_paciente: d.km_saida_paciente, chegou_destino: d.km_chegada_destino,
+    saiu_destino: d.km_saida_destino, chegou_garagem: d.km_chegada_garagem,
+  };
+  return parseFloat(mapa[etapa] || 0);
+}
+
+function getHoraEtapa(etapa, d) {
+  const mapa = {
+    saiu_garagem: d.hora_saida_garagem, chegou_paciente: d.hora_chegada_paciente,
+    saiu_paciente: d.hora_saida_paciente, chegou_destino: d.hora_chegada_destino,
+    saiu_destino: d.hora_saida_destino, chegou_garagem: d.hora_chegada_garagem,
+  };
+  return mapa[etapa] || '';
+}
+
+async function registrarEtapa(etapaId) {
+  const input = document.getElementById(`km-${etapaId}`);
+  const km = parseFloat(input?.value || 0);
+  if (!km || km <= 0) { toast('Informe o KM atual do veículo!', 'error'); input?.focus(); return; }
+
+  const btn = document.querySelector(`#etapa-${etapaId} .btn-etapa`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Registrando...'; }
+
+  const d = await api(`/api/corridas/${RID}/etapa`, 'POST', { etapa: etapaId, km });
+  if (d.ok) {
+    toast('Etapa registrada!', 'success');
+    corridaData = d;
+    // Atualizar resumo
+    const dk = await api(`/api/corridas/${RID}/km-resumo`);
+    if (dk.ok) renderApp(dk);
+  } else {
+    toast('Erro: ' + d.error, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Tentar novamente'; }
+  }
+}
+
+loadCorrida();
+setInterval(async () => {
+  const dk = await api(`/api/corridas/${RID}/km-resumo`);
+  if (dk.ok && dk.status !== 'finalizada') renderApp(dk);
+}, 30000);
+</script>
+{% endblock %}
