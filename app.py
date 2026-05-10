@@ -109,7 +109,7 @@ def clinica_filter():
 # ════════════════════════════════════════════════
 #  ROTAS PÚBLICAS
 # ════════════════════════════════════════════════
-@app.route('/')
+@app.route('/', methods=['GET','POST'])
 def index():
     if session.get('user_id'):
         perfil = session.get('perfil', '')
