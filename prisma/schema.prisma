@@ -1,0 +1,294 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// Enums como String (compatível com SQLite e PostgreSQL)
+// Plan: FREE | STARTER | PROFESSIONAL | ENTERPRISE
+// Role: SUPER_ADMIN | ADMIN | MANAGER | OPERATOR | DRIVER
+// VehicleStatus: ACTIVE | MAINTENANCE | INACTIVE
+// FuelType: GASOLINE | ETHANOL | DIESEL | FLEX | ELECTRIC | HYBRID
+// DriverStatus: ACTIVE | INACTIVE | SUSPENDED
+// TripStatus: SCHEDULED | IN_PROGRESS | COMPLETED | CANCELLED
+// SubscriptionStatus: TRIAL | ACTIVE | CANCELLED | EXPIRED
+
+model Organization {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  cnpj         String?
+  phone        String?
+  address      String?
+  plan         String   @default("FREE")
+  maxUsers     Int      @default(5)
+  maxVehicles  Int      @default(10)
+  logoUrl      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  users         User[]
+  vehicles      Vehicle[]
+  drivers       Driver[]
+  patients      Patient[]
+  trips         Trip[]
+  clinics       Clinic[]
+  fuelRecords   FuelRecord[]
+  subscriptions Subscription[]
+}
+
+model User {
+  id                 String    @id @default(cuid())
+  email              String    @unique
+  name               String?
+  password           String?
+  role               String    @default("OPERATOR")
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  twoFactorEnabled   Boolean   @default(false)
+  twoFactorSecret    String?
+  emailVerified      DateTime?
+  active             Boolean   @default(true)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  sessions   Session[]
+  magicLinks MagicLink[]
+  driver     Driver?
+
+  @@index([organizationId])
+  @@index([email])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+}
+
+model MagicLink {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([email])
+}
+
+model Vehicle {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plate          String
+  model          String
+  brand          String
+  year           Int
+  color          String?
+  capacity       Int      @default(4)
+  status         String   @default("ACTIVE")
+  currentMileage Float    @default(0)
+  fuelType       String   @default("FLEX")
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  trips       Trip[]
+  fuelRecords FuelRecord[]
+  driver      Driver?
+
+  @@unique([plate, organizationId])
+  @@index([organizationId])
+}
+
+model Driver {
+  id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId          String?  @unique
+  user            User?    @relation(fields: [userId], references: [id])
+  name            String
+  cpf             String
+  phone           String
+  licenseNumber   String
+  licenseExpiry   DateTime
+  licenseCategory String   @default("B")
+  vehicleId       String?  @unique
+  vehicle         Vehicle? @relation(fields: [vehicleId], references: [id])
+  status          String   @default("ACTIVE")
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  trips Trip[]
+
+  @@unique([cpf, organizationId])
+  @@index([organizationId])
+}
+
+model Patient {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  cpf            String?
+  birthDate      DateTime?
+  phone          String?
+  address        String?
+  lat            Float?
+  lng            Float?
+  clinicId       String?
+  clinic         Clinic?  @relation(fields: [clinicId], references: [id])
+  notes          String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  trips Trip[]
+
+  @@index([organizationId])
+  @@index([clinicId])
+}
+
+model Clinic {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  cnpj           String?
+  phone          String?
+  email          String?
+  address        String
+  lat            Float?
+  lng            Float?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  patients Patient[]
+  trips    Trip[]
+
+  @@index([organizationId])
+}
+
+model Trip {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  driverId       String
+  driver         Driver   @relation(fields: [driverId], references: [id])
+  vehicleId      String
+  vehicle        Vehicle  @relation(fields: [vehicleId], references: [id])
+  patientId      String
+  patient        Patient  @relation(fields: [patientId], references: [id])
+  clinicId       String?
+  clinic         Clinic?  @relation(fields: [clinicId], references: [id])
+
+  origin         String
+  originLat      Float?
+  originLng      Float?
+  destination    String
+  destinationLat Float?
+  destinationLng Float?
+
+  scheduledAt    DateTime
+  startedAt      DateTime?
+  completedAt    DateTime?
+
+  status         String   @default("SCHEDULED")
+  distanceKm     Float?
+  durationMin    Int?
+  costPerKm      Float?
+  totalCost      Float?
+  mileageStart   Float?
+  mileageEnd     Float?
+  notes          String?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  gpsLogs GpsLog[]
+
+  @@index([organizationId])
+  @@index([driverId])
+  @@index([vehicleId])
+  @@index([patientId])
+  @@index([scheduledAt])
+  @@index([status])
+}
+
+model GpsLog {
+  id        String   @id @default(cuid())
+  tripId    String
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  lat       Float
+  lng       Float
+  speed     Float?
+  altitude  Float?
+  timestamp DateTime @default(now())
+
+  @@index([tripId])
+}
+
+model FuelRecord {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vehicleId      String
+  vehicle        Vehicle  @relation(fields: [vehicleId], references: [id])
+  liters         Float
+  pricePerLiter  Float
+  totalCost      Float
+  mileageAtFuel  Float
+  fuelType       String
+  date           DateTime
+  station        String?
+  invoiceNumber  String?
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([vehicleId])
+  @@index([date])
+}
+
+model Subscription {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan           String
+  status         String   @default("TRIAL")
+  startDate      DateTime
+  endDate        DateTime?
+  trialEndsAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([email])
+}
