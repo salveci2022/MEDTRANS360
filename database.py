@@ -1,183 +1,171 @@
 """
-MEDTRANS 360 — Banco de dados SQLite
-Versão 2.0 — RBAC completo com painéis separados
+MEDTRANS 360 — Database
+SQLite com suporte a PostgreSQL via DATABASE_URL
 """
-import sqlite3, os, hashlib
-from pathlib import Path
+import os, sqlite3, hashlib
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-DB_PATH = Path(os.environ.get('MEDTRANS_DB_PATH', 'data/medtrans.db'))
-TZ = ZoneInfo(os.environ.get('APP_TZ', 'America/Sao_Paulo'))
+TZ = ZoneInfo('America/Sao_Paulo')
+DB_PATH = os.environ.get('MEDTRANS_DB_PATH', 'data/medtrans.db')
 
 def get_conn():
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
-def _h(s): return hashlib.sha256(s.encode()).hexdigest()
+def hash_senha(s):
+    return hashlib.sha256(s.encode()).hexdigest()
+
+def now_str():
+    return datetime.now(TZ).strftime('%d/%m/%Y %H:%M:%S')
 
 def init_db():
-    with get_conn() as conn:
-        conn.executescript("""
-        CREATE TABLE IF NOT EXISTS users (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome        TEXT NOT NULL,
-            email       TEXT UNIQUE NOT NULL,
-            senha_hash  TEXT NOT NULL,
-            perfil      TEXT DEFAULT 'operador',
-            clinica_id  INTEGER,
-            motorista_id INTEGER,
-            ativo       INTEGER DEFAULT 1,
-            created_at  TEXT DEFAULT (datetime('now','localtime'))
-        );
-        CREATE TABLE IF NOT EXISTS clinicas (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome        TEXT NOT NULL,
-            cnpj        TEXT,
-            responsavel TEXT,
-            telefone    TEXT,
-            email       TEXT,
-            endereco    TEXT,
-            cidade      TEXT,
-            estado      TEXT,
-            lat         REAL,
-            lng         REAL,
-            ativo       INTEGER DEFAULT 1,
-            created_at  TEXT DEFAULT (datetime('now','localtime'))
-        );
-        CREATE TABLE IF NOT EXISTS motoristas (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome        TEXT NOT NULL,
-            cpf         TEXT,
-            cnh         TEXT,
-            telefone    TEXT,
-            veiculo     TEXT,
-            placa       TEXT,
-            consumo_km  REAL DEFAULT 10.0,
-            status      TEXT DEFAULT 'offline',
-            clinica_id  INTEGER,
-            ativo       INTEGER DEFAULT 1,
-            created_at  TEXT DEFAULT (datetime('now','localtime'))
-        );
-        CREATE TABLE IF NOT EXISTS pacientes (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome            TEXT NOT NULL,
-            cpf             TEXT,
-            telefone        TEXT,
-            endereco        TEXT,
-            cidade          TEXT,
-            estado          TEXT,
-            lat             REAL,
-            lng             REAL,
-            clinica_id      INTEGER,
-            acompanhante    TEXT,
-            observacoes     TEXT,
-            necessidades    TEXT,
-            ativo           INTEGER DEFAULT 1,
-            created_at      TEXT DEFAULT (datetime('now','localtime'))
-        );
-        CREATE TABLE IF NOT EXISTS corridas (
-            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-            paciente_id         INTEGER NOT NULL,
-            motorista_id        INTEGER,
-            clinica_id          INTEGER,
-            tipo                TEXT DEFAULT 'ida',
-            origem              TEXT,
-            destino             TEXT,
-            lat_origem          REAL,
-            lng_origem          REAL,
-            lat_destino         REAL,
-            lng_destino         REAL,
-            data_agendada       TEXT,
-            hora_saida          TEXT,
-            hora_chegada        TEXT,
-            km_inicial          REAL DEFAULT 0,
-            km_final            REAL DEFAULT 0,
-            distancia_km        REAL DEFAULT 0,
-            status              TEXT DEFAULT 'agendada',
-            etapa_atual         TEXT DEFAULT '',
-            valor               REAL DEFAULT 0,
-            observacoes         TEXT,
-            -- Etapas detalhadas
-            km_saida_garagem    REAL DEFAULT 0,
-            km_chegada_paciente REAL DEFAULT 0,
-            km_saida_paciente   REAL DEFAULT 0,
-            km_chegada_destino  REAL DEFAULT 0,
-            km_saida_destino    REAL DEFAULT 0,
-            km_chegada_garagem  REAL DEFAULT 0,
-            -- Distâncias calculadas por trecho
-            km_garagem_paciente REAL DEFAULT 0,
-            km_com_paciente     REAL DEFAULT 0,
-            km_retorno          REAL DEFAULT 0,
-            km_total_corrida    REAL DEFAULT 0,
-            -- Timestamps das etapas
-            hora_saida_garagem    TEXT DEFAULT '',
-            hora_chegada_paciente TEXT DEFAULT '',
-            hora_saida_paciente   TEXT DEFAULT '',
-            hora_chegada_destino  TEXT DEFAULT '',
-            hora_saida_destino    TEXT DEFAULT '',
-            hora_chegada_garagem  TEXT DEFAULT '',
-            created_at  TEXT DEFAULT (datetime('now','localtime')),
-            updated_at  TEXT DEFAULT (datetime('now','localtime')),
-            FOREIGN KEY(paciente_id)  REFERENCES pacientes(id),
-            FOREIGN KEY(motorista_id) REFERENCES motoristas(id),
-            FOREIGN KEY(clinica_id)   REFERENCES clinicas(id)
-        );
-        CREATE TABLE IF NOT EXISTS despesas (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            corrida_id  INTEGER,
-            clinica_id  INTEGER,
-            tipo        TEXT,
-            descricao   TEXT,
-            valor       REAL DEFAULT 0,
-            data        TEXT,
-            created_at  TEXT DEFAULT (datetime('now','localtime')),
-            FOREIGN KEY(corrida_id) REFERENCES corridas(id)
-        );
-        CREATE TABLE IF NOT EXISTS audit_log (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario     TEXT,
-            acao        TEXT,
-            detalhes    TEXT,
-            ip          TEXT,
-            created_at  TEXT DEFAULT (datetime('now','localtime'))
-        );
-        CREATE INDEX IF NOT EXISTS idx_corridas_status    ON corridas(status);
-        CREATE INDEX IF NOT EXISTS idx_corridas_clinica   ON corridas(clinica_id);
-        CREATE INDEX IF NOT EXISTS idx_corridas_motorista ON corridas(motorista_id);
-        CREATE INDEX IF NOT EXISTS idx_corridas_data      ON corridas(data_agendada);
-        CREATE INDEX IF NOT EXISTS idx_pacientes_clinica  ON pacientes(clinica_id);
-        CREATE INDEX IF NOT EXISTS idx_motoristas_status  ON motoristas(status);
-        """)
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    conn = get_conn()
+    c = conn.cursor()
 
-        # Seed usuários demo
-        demos = [
-            ('Administrador Master', 'admin@medtrans360.com.br',   _h('Admin@2025!'),   'master',   None, None),
-            ('Operador Central',     'operador@medtrans360.com.br', _h('Oper@2025!'),    'operador', None, None),
-            ('Clínica São Lucas',    'clinica@medtrans360.com.br',  _h('Clinica@2025!'), 'clinica',  None, None),
-            ('Motorista João',       'motorista@medtrans360.com.br',_h('Motor@2025!'),   'motorista',None, None),
-        ]
-        for nome, email, senha, perfil, cid, mid in demos:
-            cur = conn.execute("SELECT id FROM users WHERE email=?", (email,))
-            if not cur.fetchone():
-                conn.execute(
-                    "INSERT INTO users(nome,email,senha_hash,perfil,clinica_id,motorista_id) VALUES(?,?,?,?,?,?)",
-                    (nome, email, senha, perfil, cid, mid)
-                )
+    c.executescript("""
+    CREATE TABLE IF NOT EXISTS usuarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        senha TEXT NOT NULL,
+        perfil TEXT NOT NULL DEFAULT 'operador',
+        ativo INTEGER DEFAULT 1,
+        criado_em TEXT
+    );
 
-        # Seed clínica demo
-        cur = conn.execute("SELECT id FROM clinicas WHERE nome='Clínica São Lucas Demo'")
-        if not cur.fetchone():
-            conn.execute("""INSERT INTO clinicas(nome,cnpj,responsavel,telefone,cidade,estado)
-                VALUES('Clínica São Lucas Demo','00.000.000/0001-00','Dr. Demo','(61) 99999-0000','Brasília','DF')""")
+    CREATE TABLE IF NOT EXISTS motoristas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        cnh TEXT,
+        telefone TEXT,
+        veiculo TEXT,
+        placa TEXT,
+        ativo INTEGER DEFAULT 1,
+        criado_em TEXT
+    );
 
-        conn.commit()
-    print("✅ Banco MEDTRANS 360 v2 inicializado")
+    CREATE TABLE IF NOT EXISTS pacientes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        cpf TEXT,
+        telefone TEXT,
+        endereco TEXT,
+        convenio TEXT,
+        observacoes TEXT,
+        criado_em TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS clinicas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        cnpj TEXT,
+        telefone TEXT,
+        endereco TEXT,
+        responsavel TEXT,
+        email TEXT,
+        ativo INTEGER DEFAULT 1,
+        criado_em TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS corridas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        paciente_id INTEGER,
+        motorista_id INTEGER,
+        clinica_id INTEGER,
+        origem TEXT,
+        destino TEXT,
+        status TEXT DEFAULT 'agendada',
+        tipo_servico TEXT DEFAULT 'consulta',
+        data_agendada TEXT,
+        data_inicio TEXT,
+        data_fim TEXT,
+        km_saida_garagem REAL,
+        km_chegada_paciente REAL,
+        km_saida_paciente REAL,
+        km_chegada_destino REAL,
+        km_saida_destino REAL,
+        km_retorno_garagem REAL,
+        km_total REAL DEFAULT 0,
+        valor REAL DEFAULT 0,
+        observacoes TEXT,
+        criado_em TEXT,
+        FOREIGN KEY(paciente_id) REFERENCES pacientes(id),
+        FOREIGN KEY(motorista_id) REFERENCES motoristas(id),
+        FOREIGN KEY(clinica_id) REFERENCES clinicas(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS chat_ia (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        usuario_id INTEGER,
+        role TEXT,
+        conteudo TEXT,
+        criado_em TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        usuario TEXT,
+        acao TEXT,
+        detalhes TEXT,
+        ip TEXT,
+        criado_em TEXT
+    );
+    """)
+
+    # Usuários padrão
+    usuarios = [
+        ('Administrador', 'admin@medtrans360.com.br', hash_senha('Admin@2025!'), 'master'),
+        ('Operador Demo', 'operador@medtrans360.com.br', hash_senha('Oper@2025!'), 'operador'),
+        ('Clínica Demo', 'clinica@medtrans360.com.br', hash_senha('Clinica@2025!'), 'clinica'),
+        ('Motorista Demo', 'motorista@medtrans360.com.br', hash_senha('Motor@2025!'), 'motorista'),
+    ]
+    for nome, email, senha, perfil in usuarios:
+        c.execute("INSERT OR IGNORE INTO usuarios(nome,email,senha,perfil,criado_em) VALUES(?,?,?,?,?)",
+                  (nome, email, senha, perfil, now_str()))
+
+    # Dados demo
+    c.execute("INSERT OR IGNORE INTO motoristas(nome,cnh,telefone,veiculo,placa,criado_em) VALUES(?,?,?,?,?,?)",
+              ('Carlos Silva', '12345678900', '(61) 99111-2222', 'Toyota Corolla Branco', 'ABC-1234', now_str()))
+    c.execute("INSERT OR IGNORE INTO motoristas(nome,cnh,telefone,veiculo,placa,criado_em) VALUES(?,?,?,?,?,?)",
+              ('Ana Oliveira', '98765432100', '(61) 99333-4444', 'Honda HRV Prata', 'DEF-5678', now_str()))
+
+    c.execute("INSERT OR IGNORE INTO pacientes(nome,cpf,telefone,convenio,criado_em) VALUES(?,?,?,?,?)",
+              ('João Pereira', '000.000.000-00', '(61) 98765-4321', 'Unimed', now_str()))
+    c.execute("INSERT OR IGNORE INTO pacientes(nome,cpf,telefone,convenio,criado_em) VALUES(?,?,?,?,?)",
+              ('Maria Santos', '111.111.111-11', '(61) 91234-5678', 'Bradesco Saúde', now_str()))
+
+    c.execute("INSERT OR IGNORE INTO clinicas(nome,cnpj,telefone,endereco,criado_em) VALUES(?,?,?,?,?)",
+              ('Clínica São Lucas', '00.000.000/0001-00', '(61) 3333-4444', 'SCS Quadra 2, Brasília-DF', now_str()))
+
+    c.execute("""INSERT OR IGNORE INTO corridas(paciente_id,motorista_id,clinica_id,origem,destino,
+              status,tipo_servico,data_agendada,km_total,valor,criado_em)
+              VALUES(1,1,1,'Asa Norte, Brasília','Clínica São Lucas','concluida','hemodiálise','14/05/2026',28.4,85.0,?)""",
+              (now_str(),))
+    c.execute("""INSERT OR IGNORE INTO corridas(paciente_id,motorista_id,clinica_id,origem,destino,
+              status,tipo_servico,data_agendada,criado_em)
+              VALUES(2,2,1,'Taguatinga, DF','Hospital Santa Lúcia','em_andamento','consulta','14/05/2026',?)""",
+              (now_str(),))
+    c.execute("""INSERT OR IGNORE INTO corridas(paciente_id,motorista_id,clinica_id,origem,destino,
+              status,tipo_servico,data_agendada,criado_em)
+              VALUES(1,1,1,'Guará, DF','Hospital de Base','agendada','fisioterapia','15/05/2026',?)""",
+              (now_str(),))
+
+    conn.commit()
+    conn.close()
+    print("✅ Banco MEDTRANS 360 inicializado")
 
 def audit(usuario, acao, detalhes='', ip=''):
-    with get_conn() as conn:
-        conn.execute("INSERT INTO audit_log(usuario,acao,detalhes,ip) VALUES(?,?,?,?)",
-                     (usuario, acao, detalhes, ip))
+    try:
+        conn = get_conn()
+        conn.execute("INSERT INTO audit_log(usuario,acao,detalhes,ip,criado_em) VALUES(?,?,?,?,?)",
+                     (usuario, acao, detalhes, ip, now_str()))
+        conn.commit()
+        conn.close()
+    except:
+        pass

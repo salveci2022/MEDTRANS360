@@ -1,126 +1,72 @@
-{% extends "base_clinica.html" %}
-{% block title %}Painel da Clínica — MEDTRANS 360{% endblock %}
-{% block page_title %}Painel da Clínica{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Painel Clínica — MEDTRANS 360{% endblock %}
+{% block page_title %}PAINEL CLÍNICA{% endblock %}
 {% block content %}
-<div class="stat-grid">
-  <div class="stat-card c-blue"><div class="stat-label">Total Corridas</div><div class="stat-value cv-blue" id="cl-total">0</div><div class="stat-sub">Todas as corridas</div></div>
-  <div class="stat-card c-amber"><div class="stat-label">Em Andamento</div><div class="stat-value cv-amber" id="cl-andamento">0</div><div class="stat-sub">Corridas ativas agora</div></div>
-  <div class="stat-card c-green"><div class="stat-label">Finalizadas</div><div class="stat-value cv-green" id="cl-finalizadas">0</div><div class="stat-sub">Corridas concluídas</div></div>
-  <div class="stat-card c-purple"><div class="stat-label">Pacientes</div><div class="stat-value cv-purple" id="cl-pacientes">0</div><div class="stat-sub">Pacientes ativos</div></div>
+<div style="margin-bottom:20px">
+  <div style="font-size:1.1rem;font-weight:800">Olá, {{ usuario }}!</div>
+  <div style="font-size:.75rem;color:var(--text3)">Solicitações de transporte</div>
 </div>
-
-<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
-  <button class="btn btn-primary" onclick="openModal('modal-solicit')">+ Solicitar Transporte</button>
-  <button class="btn btn-ghost" onclick="loadCorridas()">Atualizar</button>
-  <a href="/relatorio/mensal" target="_blank" class="btn btn-ghost">PDF Mensal</a>
-  <a href="/export/corridas.xlsx" class="btn btn-ghost">Excel</a>
+<div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+  <button class="btn btn-primary" onclick="document.getElementById('modal-nova').classList.add('open')">+ Solicitar Transporte</button>
 </div>
-
 <div class="card">
-  <h3 style="font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;margin-bottom:16px">Corridas da minha clínica</h3>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>#</th><th>Paciente</th><th>Motorista</th><th>Tipo</th><th>Data</th><th>Origem → Destino</th><th>Valor</th><th>Status</th><th>PDF</th></tr></thead>
-      <tbody id="tbody-clinica"><tr><td colspan="9"><div class="loading"><div class="spinner"></div></div></td></tr></tbody>
+      <thead><tr><th>#</th><th>Paciente</th><th>Motorista</th><th>Destino</th><th>Data</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for c in corridas %}
+        <tr>
+          <td><span style="font-family:var(--mono);color:var(--blue)">#{{ c.id }}</span></td>
+          <td><strong>{{ c.paciente_nome or '—' }}</strong></td>
+          <td>{{ c.motorista_nome or '—' }}</td>
+          <td>{{ (c.destino or '—')[:30] }}</td>
+          <td><span style="font-family:var(--mono);font-size:.75rem">{{ c.data_agendada or '—' }}</span></td>
+          <td><span class="status status-{{ c.status }}">{{ c.status.replace('_',' ') }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text3)">Nenhuma solicitação</td></tr>
+        {% endfor %}
+      </tbody>
     </table>
   </div>
 </div>
-
-<!-- Modal solicitar transporte -->
-<div class="modal-overlay" id="modal-solicit">
-  <div class="modal" style="max-width:600px">
-    <div class="modal-title">Solicitar Transporte <button class="modal-close" onclick="closeModal('modal-solicit')">✕</button></div>
-    <div class="form-grid">
-      <div class="form-group"><label>Paciente *</label><select id="s-paciente"></select></div>
-      <div class="form-group"><label>Tipo</label>
-        <select id="s-tipo">
-          <option value="ida">Ida (Casa → Clínica)</option>
-          <option value="volta">Volta (Clínica → Casa)</option>
-          <option value="consulta">Consulta</option>
-          <option value="exame">Exame</option>
-          <option value="fisioterapia">Fisioterapia</option>
-          <option value="hemodialise">Hemodiálise</option>
-        </select>
+<div class="modal-overlay" id="modal-nova" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal">
+    <div class="modal-title">Solicitar Transporte</div>
+    <form method="POST" action="/corridas/nova">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Paciente</label>
+          <select name="paciente_id" class="form-control" required>
+            <option value="">Selecione...</option>
+            {% for p in pacientes %}<option value="{{ p.id }}">{{ p.nome }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Motorista</label>
+          <select name="motorista_id" class="form-control">
+            <option value="">Selecione...</option>
+            {% for m in motoristas %}<option value="{{ m.id }}">{{ m.nome }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Origem</label><input type="text" name="origem" class="form-control"></div>
+        <div class="form-group"><label class="form-label">Destino</label><input type="text" name="destino" class="form-control"></div>
+        <div class="form-group">
+          <label class="form-label">Tipo</label>
+          <select name="tipo_servico" class="form-control">
+            <option value="consulta">Consulta</option>
+            <option value="hemodiálise">Hemodiálise</option>
+            <option value="exame">Exame</option>
+            <option value="urgência">Urgência</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Data</label><input type="text" name="data_agendada" class="form-control" placeholder="DD/MM/AAAA"></div>
       </div>
-      <div class="form-group"><label>Data</label><input type="date" id="s-data"></div>
-      <div class="form-group"><label>Hora</label><input type="time" id="s-hora"></div>
-      <div class="form-group"><label>Origem</label><input id="s-origem" placeholder="Endereço de partida"></div>
-      <div class="form-group"><label>Destino</label><input id="s-destino" placeholder="Endereço de chegada"></div>
-      <div class="form-group full"><label>Observações</label><textarea id="s-obs" placeholder="Informações especiais para o motorista..."></textarea></div>
-    </div>
-    <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
-      <button class="btn btn-ghost" onclick="closeModal('modal-solicit')">Cancelar</button>
-      <button class="btn btn-primary" onclick="solicitarTransporte()">Solicitar Transporte</button>
-    </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+        <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-nova').classList.remove('open')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Solicitar</button>
+      </div>
+    </form>
   </div>
 </div>
-{% endblock %}
-{% block scripts %}
-<script>
-const STATUS_BADGES={agendada:'badge-blue',em_andamento:'badge-amber',finalizada:'badge-green',cancelada:'badge-red'};
-const STATUS_LABELS={agendada:'Agendada',em_andamento:'Em Andamento',finalizada:'Finalizada',cancelada:'Cancelada'};
-
-async function loadDados(){
-  const [dc,dp] = await Promise.all([api('/api/corridas'),api('/api/pacientes')]);
-  if(dc.ok){
-    const total = dc.corridas.length;
-    const andamento = dc.corridas.filter(c=>c.status==='em_andamento').length;
-    const finalizadas = dc.corridas.filter(c=>c.status==='finalizada').length;
-    document.getElementById('cl-total').textContent = total;
-    document.getElementById('cl-andamento').textContent = andamento;
-    document.getElementById('cl-finalizadas').textContent = finalizadas;
-  }
-  if(dp.ok) document.getElementById('cl-pacientes').textContent = dp.pacientes.length;
-  loadCorridas();
-}
-
-async function loadCorridas(){
-  const d = await api('/api/corridas');
-  const tbody = document.getElementById('tbody-clinica');
-  if(!d.ok||!d.corridas.length){
-    tbody.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:24px">Nenhuma corrida ainda</td></tr>';
-    return;
-  }
-  tbody.innerHTML = d.corridas.map(c=>`
-    <tr>
-      <td>#${c.id}</td>
-      <td>${c.paciente_nome||'—'}</td>
-      <td>${c.motorista_nome||'—'}</td>
-      <td style="font-size:12px">${c.tipo||'—'}</td>
-      <td>${c.data_agendada||'—'}</td>
-      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${c.origem||'—'} → ${c.destino||'—'}</td>
-      <td>R$ ${Number(c.valor||0).toFixed(2)}</td>
-      <td><span class="badge ${STATUS_BADGES[c.status]||'badge-gray'}">${STATUS_LABELS[c.status]||c.status}</span></td>
-      <td><a class="btn btn-sm btn-ghost" href="/relatorio/corrida/${c.id}" target="_blank">PDF</a></td>
-    </tr>`).join('');
-}
-
-async function loadPacientes(){
-  const d = await api('/api/pacientes');
-  document.getElementById('s-paciente').innerHTML =
-    '<option value="">Selecione o paciente</option>' +
-    (d.pacientes||[]).map(p=>`<option value="${p.id}">${p.nome}</option>`).join('');
-}
-
-async function solicitarTransporte(){
-  const body = {
-    paciente_id: document.getElementById('s-paciente').value,
-    tipo: document.getElementById('s-tipo').value,
-    data_agendada: document.getElementById('s-data').value,
-    hora_saida: document.getElementById('s-hora').value,
-    origem: document.getElementById('s-origem').value,
-    destino: document.getElementById('s-destino').value,
-    observacoes: document.getElementById('s-obs').value,
-  };
-  if(!body.paciente_id){ toast('Selecione o paciente','error'); return; }
-  const d = await api('/api/corridas','POST',body);
-  if(d.ok){ toast('Transporte solicitado!','success'); closeModal('modal-solicit'); loadDados(); }
-  else toast('Erro: '+d.error,'error');
-}
-
-document.getElementById('s-data').value = new Date().toISOString().split('T')[0];
-loadPacientes();
-loadDados();
-setInterval(loadDados, 20000);
-</script>
 {% endblock %}

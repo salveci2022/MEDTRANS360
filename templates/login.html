@@ -1,78 +1,191 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Login — MEDTRANS 360</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MEDTRANS 360 — Entrar</title>
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'DM Sans',sans-serif;background:#060c18;color:#e8f0fe;
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#04080f;--bg2:#080f1c;--card:#0d1a2e;
+  --border:#1a3050;--border2:#1e3a5f;
+  --blue:#0066ff;--blue2:#0052cc;--blue-glow:rgba(0,102,255,.2);
+  --cyan:#00d4ff;--green:#00e676;--red:#ff3d5a;
+  --text:#e8f0fe;--text2:#8ba3c7;--text3:#4a6080;
+  --font:'Exo 2',sans-serif;--mono:'JetBrains Mono',monospace;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);}
+
+/* BG Animado */
+.bg-grid{
+  position:fixed;inset:0;
+  background-image:
+    linear-gradient(rgba(0,102,255,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,102,255,.05) 1px, transparent 1px);
+  background-size:60px 60px;
+  animation:gridMove 20s linear infinite;
+}
+@keyframes gridMove{from{background-position:0 0;}to{background-position:60px 60px;}}
+
+.bg-glow{
+  position:fixed;width:600px;height:600px;border-radius:50%;
+  background:radial-gradient(circle, rgba(0,102,255,.08) 0%, transparent 70%);
+  top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;
+}
+
+/* LAYOUT */
+.login-wrap{
   min-height:100vh;display:flex;align-items:center;justify-content:center;
-  background-image:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(0,102,255,.15) 0%,transparent 70%)}
+  padding:20px;position:relative;z-index:1;
+}
 .login-box{
-  background:#0d1830;border:1px solid rgba(255,255,255,.07);border-radius:24px;
-  padding:48px 40px;width:min(440px,95vw);
+  width:100%;max-width:440px;
+  background:rgba(13,26,46,.9);
+  border:1px solid var(--border2);
+  border-radius:20px;
+  padding:40px;
+  backdrop-filter:blur(20px);
+  box-shadow:0 20px 60px rgba(0,0,0,.5), 0 0 0 1px rgba(0,102,255,.1);
+  animation:fadeUp .4s ease;
 }
-.logo{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;text-align:center;margin-bottom:6px;
-  background:linear-gradient(135deg,#0066ff,#00e5ff);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.logo-sub{text-align:center;font-size:13px;color:#6b7fa3;margin-bottom:36px}
-.form-group{margin-bottom:18px}
-label{display:block;font-size:12px;font-weight:500;color:#6b7fa3;
-  text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
-input{width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07);
-  border-radius:10px;padding:12px 16px;color:#e8f0fe;font-size:15px;
-  font-family:'DM Sans',sans-serif;outline:none;transition:border-color .2s}
-input:focus{border-color:rgba(0,102,255,.5)}
+@keyframes fadeUp{from{transform:translateY(20px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+
+.login-logo{text-align:center;margin-bottom:32px;}
+.shield{
+  width:80px;height:80px;margin:0 auto 16px;
+  background:rgba(0,102,255,.1);
+  border:1px solid rgba(0,102,255,.3);
+  border-radius:50%;display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+.shield::after{
+  content:'';position:absolute;inset:-4px;border-radius:50%;
+  background:conic-gradient(from 0deg, var(--blue), var(--cyan), transparent, var(--blue));
+  z-index:-1;opacity:.4;animation:spin 4s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+.brand-name{font-size:1.6rem;font-weight:900;letter-spacing:3px;color:var(--text);}
+.brand-sub{font-size:.65rem;color:var(--cyan);letter-spacing:3px;font-family:var(--mono);margin-top:4px;}
+.brand-desc{font-size:.75rem;color:var(--text3);margin-top:8px;}
+
+.form-group{margin-bottom:18px;}
+.form-label{
+  display:block;font-size:.65rem;color:var(--text3);
+  font-family:var(--mono);text-transform:uppercase;letter-spacing:1.5px;
+  margin-bottom:8px;
+}
+.form-control{
+  width:100%;padding:12px 16px;
+  background:rgba(8,15,28,.8);
+  border:1px solid var(--border);
+  border-radius:10px;color:var(--text);
+  font-size:.9rem;font-family:var(--font);
+  transition:all .2s;
+}
+.form-control:focus{
+  outline:none;border-color:var(--blue);
+  box-shadow:0 0 0 3px var(--blue-glow);
+  background:rgba(0,102,255,.05);
+}
+.form-control::placeholder{color:var(--text3);}
+
 .btn-login{
-  width:100%;padding:14px;background:linear-gradient(135deg,#0066ff,#7b42f6);
-  color:#fff;border:0;border-radius:12px;font-size:16px;font-weight:600;
-  cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:8px;
-  box-shadow:0 10px 30px rgba(0,102,255,.3);transition:all .25s;
+  width:100%;padding:13px;
+  background:linear-gradient(135deg, var(--blue), var(--blue2));
+  color:#fff;font-size:.9rem;font-weight:800;
+  border:none;border-radius:10px;cursor:pointer;
+  letter-spacing:1px;transition:all .2s;font-family:var(--font);
+  position:relative;overflow:hidden;
 }
-.btn-login:hover{box-shadow:0 16px 40px rgba(0,102,255,.5);transform:translateY(-1px)}
-.erro{background:rgba(255,71,87,.1);border:1px solid rgba(255,71,87,.3);
-  color:#ff4757;border-radius:10px;padding:12px 16px;font-size:14px;margin-bottom:18px}
-.demo-box{margin-top:24px;padding:16px;background:rgba(0,102,255,.06);
-  border:1px solid rgba(0,102,255,.2);border-radius:12px;font-size:13px;color:#6b7fa3}
-.demo-box strong{color:#0066ff;display:block;margin-bottom:4px}
-.demo-btn{
-  margin-top:10px;width:100%;padding:8px;background:rgba(0,102,255,.15);
-  color:#0066ff;border:1px solid rgba(0,102,255,.3);border-radius:8px;
-  cursor:pointer;font-size:13px;font-family:'DM Sans',sans-serif;transition:all .2s;
+.btn-login::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg, var(--cyan), var(--blue));
+  opacity:0;transition:opacity .2s;
 }
-.demo-btn:hover{background:rgba(0,102,255,.25)}
-.footer{text-align:center;margin-top:24px;font-size:12px;color:#3a4a6b}
+.btn-login:hover::before{opacity:1;}
+.btn-login span{position:relative;z-index:1;}
+.btn-login:hover{box-shadow:0 8px 24px rgba(0,102,255,.5);transform:translateY(-1px);}
+
+.erro-box{
+  background:rgba(255,61,90,.1);border:1px solid rgba(255,61,90,.3);
+  border-radius:8px;padding:10px 14px;
+  color:#ff3d5a;font-size:.8rem;margin-bottom:18px;
+  display:flex;align-items:center;gap:8px;
+}
+
+.creds-hint{
+  margin-top:20px;padding:14px;
+  background:rgba(0,102,255,.05);
+  border:1px solid rgba(0,102,255,.15);
+  border-radius:10px;font-size:.7rem;color:var(--text3);
+  font-family:var(--mono);line-height:1.8;
+}
+.creds-hint strong{color:var(--text2);}
+
+.footer-brand{text-align:center;margin-top:24px;font-size:.65rem;color:var(--text3);}
+.footer-brand span{color:var(--blue);}
 </style>
 </head>
 <body>
-<div class="login-box">
-  <div class="logo">MEDTRANS 360</div>
-  <div class="logo-sub">Plataforma de Transporte de Pacientes</div>
-  {% if erro %}<div class="erro">⚠️ {{ erro }}</div>{% endif %}
-  <form method="POST">
-    <div class="form-group">
-      <label>E-mail</label>
-      <input type="email" name="email" placeholder="seu@email.com" required autocomplete="username">
+<div class="bg-grid"></div>
+<div class="bg-glow"></div>
+
+<div class="login-wrap">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="shield">
+        <svg width="36" height="36" viewBox="0 0 40 40">
+          <defs>
+            <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#0066ff"/>
+              <stop offset="100%" stop-color="#00d4ff"/>
+            </linearGradient>
+          </defs>
+          <path d="M20 3L6 9v11c0 10 6 19 14 23 8-4 14-13 14-23V9L20 3z"
+                fill="rgba(0,102,255,.15)" stroke="url(#g1)" stroke-width="1.5"/>
+          <text x="20" y="24" text-anchor="middle" fill="url(#g1)"
+                font-size="12" font-weight="900" font-family="Exo 2">MT</text>
+        </svg>
+      </div>
+      <div class="brand-name">MEDTRANS</div>
+      <div class="brand-sub">360 CONTROL</div>
+      <div class="brand-desc">Plataforma de Gestão de Transporte Médico</div>
     </div>
-    <div class="form-group">
-      <label>Senha</label>
-      <input type="password" name="senha" placeholder="••••••••" required autocomplete="current-password">
+
+    {% if erro %}
+    <div class="erro-box">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      {{ erro }}
     </div>
-    <button type="submit" class="btn-login">Entrar no sistema →</button>
-  </form>
-  <div class="demo-box">
-    <strong>🔑 Acesso de demonstração</strong>
-    admin@medtrans360.com.br / Admin@2025!
-    <button class="demo-btn" onclick="preencherDemo()">Preencher automaticamente</button>
+    {% endif %}
+
+    <form method="POST">
+      <div class="form-group">
+        <label class="form-label">E-mail</label>
+        <input type="email" name="email" class="form-control" placeholder="seu@email.com.br" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Senha</label>
+        <input type="password" name="senha" class="form-control" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="btn-login"><span>ENTRAR NO SISTEMA</span></button>
+    </form>
+
+    <div class="creds-hint">
+      <strong>Credenciais de acesso:</strong><br>
+      master → admin@medtrans360.com.br / Admin@2025!<br>
+      motorista → motorista@medtrans360.com.br / Motor@2025!<br>
+      clínica → clinica@medtrans360.com.br / Clinica@2025!
+    </div>
+
+    <div class="footer-brand">
+      <span>SPYNET</span> Tecnologia Forense · CNPJ 64.000.808/0001-51
+    </div>
   </div>
-  <div class="footer">MEDTRANS 360 © SpyNet Tecnologia Forense | CNPJ 64.000.808/0001-51</div>
 </div>
-<script>
-function preencherDemo(){
-  document.querySelector('[name=email]').value='admin@medtrans360.com.br';
-  document.querySelector('[name=senha]').value='Admin@2025!';
-}
-</script>
 </body>
 </html>

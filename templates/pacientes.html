@@ -1,107 +1,49 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 {% block title %}Pacientes — MEDTRANS 360{% endblock %}
-{% block page_title %}Pacientes{% endblock %}
+{% block page_title %}PACIENTES{% endblock %}
 {% block content %}
-<div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
-  <button class="btn btn-primary" onclick="openModal('modal-pac');loadClinicas()">+ Novo Paciente</button>
-  <button class="btn btn-ghost" onclick="loadPacientes()">
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
-    Recarregar
-  </button>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+  <div><div style="font-size:1.1rem;font-weight:800">Pacientes</div><div style="font-size:.75rem;color:var(--text3)">{{ pacientes|length }} cadastrado(s)</div></div>
+  <button class="btn btn-primary" onclick="document.getElementById('modal-novo').classList.add('open')">+ Novo Paciente</button>
 </div>
 <div class="card">
   <div class="table-wrap">
     <table>
-      <thead><tr><th>#</th><th>Nome</th><th>CPF</th><th>Telefone</th><th>Cidade</th><th>Clínica</th><th>Acompanhante</th><th>Ações</th></tr></thead>
-      <tbody id="tbody-pac"><tr><td colspan="8"><div class="loading"><div class="spinner"></div></div></td></tr></tbody>
+      <thead><tr><th>#</th><th>Nome</th><th>CPF</th><th>Telefone</th><th>Convênio</th><th>Endereço</th></tr></thead>
+      <tbody>
+        {% for p in pacientes %}
+        <tr>
+          <td><span style="font-family:var(--mono);color:var(--blue)">{{ p.id }}</span></td>
+          <td><strong>{{ p.nome }}</strong></td>
+          <td><span style="font-family:var(--mono);font-size:.75rem">{{ p.cpf or '—' }}</span></td>
+          <td>{{ p.telefone or '—' }}</td>
+          <td><span style="color:var(--cyan)">{{ p.convenio or '—' }}</span></td>
+          <td>{{ (p.endereco or '—')[:40] }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text3)">Nenhum paciente cadastrado</td></tr>
+        {% endfor %}
+      </tbody>
     </table>
   </div>
 </div>
-<div class="modal-overlay" id="modal-pac">
+<div class="modal-overlay" id="modal-novo" onclick="if(event.target===this)this.classList.remove('open')">
   <div class="modal">
-    <div class="modal-title">Novo Paciente <button class="modal-close" onclick="closeModal('modal-pac')">✕</button></div>
-    <div class="form-grid">
-      <div class="form-group full"><label>Nome Completo *</label><input id="p-nome" placeholder="Nome do paciente"></div>
-      <div class="form-group"><label>CPF</label><input id="p-cpf" placeholder="000.000.000-00"></div>
-      <div class="form-group"><label>Telefone</label><input id="p-tel" placeholder="(00) 00000-0000"></div>
-      <div class="form-group full"><label>Endereço</label><input id="p-end" placeholder="Rua, número, bairro"></div>
-      <div class="form-group"><label>Cidade</label><input id="p-cidade" placeholder="Brasília"></div>
-      <div class="form-group"><label>Estado</label><select id="p-estado"><option>DF</option><option>SP</option><option>RJ</option><option>MG</option><option>GO</option><option>BA</option><option>Outro</option></select></div>
-      <div class="form-group"><label>Clínica Vinculada</label><select id="p-clinica"></select></div>
-      <div class="form-group"><label>Acompanhante</label><input id="p-acomp" placeholder="Nome do acompanhante"></div>
-      <div class="form-group full"><label>Observações Médicas</label><textarea id="p-obs" placeholder="Condições especiais, alergias, necessidades..."></textarea></div>
-    </div>
-    <div style="display:flex;gap:10px;margin-top:20px;justify-content:space-between;flex-wrap:wrap">
-      <button class="btn btn-ghost" onclick="limparFormPac()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
-        Limpar
-      </button>
-      <div style="display:flex;gap:10px">
-        <button class="btn btn-ghost" onclick="closeModal('modal-pac')">Cancelar</button>
-        <button class="btn btn-primary" onclick="criarPaciente()">Salvar Paciente</button>
+    <div class="modal-title">Novo Paciente</div>
+    <form method="POST" action="/pacientes/novo">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group" style="grid-column:1/-1"><label class="form-label">Nome Completo</label><input type="text" name="nome" class="form-control" required></div>
+        <div class="form-group"><label class="form-label">CPF</label><input type="text" name="cpf" class="form-control" placeholder="000.000.000-00"></div>
+        <div class="form-group"><label class="form-label">Telefone</label><input type="text" name="telefone" class="form-control"></div>
+        <div class="form-group"><label class="form-label">Convênio</label><input type="text" name="convenio" class="form-control"></div>
+        <div class="form-group"><label class="form-label">Endereço</label><input type="text" name="endereco" class="form-control"></div>
+        <div class="form-group" style="grid-column:1/-1"><label class="form-label">Observações</label><textarea name="observacoes" class="form-control" rows="2"></textarea></div>
       </div>
-    </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+        <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-novo').classList.remove('open')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Cadastrar</button>
+      </div>
+    </form>
   </div>
 </div>
-{% endblock %}
-{% block scripts %}
-<script>
-async function loadPacientes(){
-  const d = await api('/api/pacientes');
-  const tbody = document.getElementById('tbody-pac');
-  if(!d.pacientes?.length){ tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">Nenhum paciente cadastrado</td></tr>'; return; }
-  tbody.innerHTML = d.pacientes.map(p=>`
-    <tr>
-      <td>${p.id}</td><td><strong>${p.nome}</strong></td>
-      <td>${p.cpf||'—'}</td><td>${p.telefone||'—'}</td>
-      <td>${p.cidade||'—'}</td><td>${p.clinica_nome||'—'}</td>
-      <td>${p.acompanhante||'—'}</td>
-      <td style="display:flex;gap:6px">
-        <button class="btn btn-sm btn-ghost" onclick="editarPaciente(${p.id},'${(p.nome||'').replace(/'/g,'')}')" title="Editar">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-        </button>
-        <button class="btn btn-sm btn-danger" onclick="deletar(${p.id})" title="Apagar">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
-        </button>
-      </td>
-    </tr>`).join('');
-}
-async function loadClinicas(){
-  const d = await api('/api/clinicas');
-  document.getElementById('p-clinica').innerHTML =
-    '<option value="">Sem vínculo</option>' +
-    (d.clinicas||[]).map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
-}
-async function criarPaciente(){
-  const body={nome:document.getElementById('p-nome').value,cpf:document.getElementById('p-cpf').value,
-    telefone:document.getElementById('p-tel').value,endereco:document.getElementById('p-end').value,
-    cidade:document.getElementById('p-cidade').value,estado:document.getElementById('p-estado').value,
-    clinica_id:document.getElementById('p-clinica').value||null,
-    acompanhante:document.getElementById('p-acomp').value,
-    observacoes:document.getElementById('p-obs').value};
-  if(!body.nome){toast('Informe o nome','error');return;}
-  const d=await api('/api/pacientes','POST',body);
-  if(d.ok){toast('Paciente cadastrado!','success');closeModal('modal-pac');loadPacientes();}
-  else toast('Erro: '+d.error,'error');
-}
-async function deletar(id){
-  if(!confirm('Remover este paciente?'))return;
-  const d=await api(`/api/pacientes/${id}`,'DELETE');
-  if(d.ok){toast('Removido','info');loadPacientes();}
-}
-loadClinicas(); loadPacientes();
-
-function limparFormPac(){
-  ['p-nome','p-cpf','p-tel','p-end','p-cidade','p-acomp','p-obs'].forEach(id=>{
-    const el=document.getElementById(id); if(el) el.value='';
-  });
-  document.getElementById('p-estado').value='DF';
-  document.getElementById('p-clinica').value='';
-  toast('Formulário limpo','info');
-}
-
-function editarPaciente(id, nome){
-  toast('Edição: selecione o paciente na lista e use os campos do formulário','info');
-}
-</script>
 {% endblock %}

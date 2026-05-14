@@ -1,132 +1,103 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 {% block title %}Dashboard — MEDTRANS 360{% endblock %}
-{% block page_title %}Dashboard{% endblock %}
+{% block page_title %}DASHBOARD{% endblock %}
+
 {% block content %}
-<div class="stat-grid" id="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
-  <div class="stat-card c-blue">
-    <div class="stat-label">Total Corridas</div>
-    <div class="stat-value cv-blue" id="s-total" style="font-size:2.4rem">0</div>
-    <div class="stat-sub">Todas as corridas</div>
-  </div>
-  <div class="stat-card c-green">
+<div class="stats-grid">
+  <div class="stat-card">
     <div class="stat-label">Corridas Hoje</div>
-    <div class="stat-value cv-green" id="s-hoje" style="font-size:2.4rem">0</div>
-    <div class="stat-sub">Agendadas hoje</div>
+    <div class="stat-value" style="color:var(--cyan)">{{ stats.corridas_hoje }}</div>
+    <div style="font-size:.7rem;color:var(--text3);font-family:var(--mono)">agendadas</div>
+    <div class="stat-icon"><svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24" opacity=".5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
   </div>
-  <div class="stat-card c-amber">
+  <div class="stat-card">
     <div class="stat-label">Em Andamento</div>
-    <div class="stat-value cv-amber" id="s-andamento" style="font-size:2.4rem">0</div>
-    <div class="stat-sub">Corridas ativas agora</div>
+    <div class="stat-value" style="color:var(--green)">{{ stats.em_andamento }}</div>
+    <div style="font-size:.7rem;color:var(--text3);font-family:var(--mono)">ativas agora</div>
   </div>
-  <div class="stat-card c-purple">
+  <div class="stat-card">
+    <div class="stat-label">Motoristas</div>
+    <div class="stat-value" style="color:var(--blue)">{{ stats.motoristas_ativos }}</div>
+    <div style="font-size:.7rem;color:var(--text3);font-family:var(--mono)">disponíveis</div>
+  </div>
+  <div class="stat-card">
     <div class="stat-label">Pacientes</div>
-    <div class="stat-value cv-purple" id="s-pacientes" style="font-size:2.4rem">0</div>
-    <div class="stat-sub">Cadastrados ativos</div>
+    <div class="stat-value">{{ stats.pacientes }}</div>
+    <div style="font-size:.7rem;color:var(--text3);font-family:var(--mono)">cadastrados</div>
   </div>
-  <div class="stat-card c-cyan">
-    <div class="stat-label">Motoristas Online</div>
-    <div class="stat-value cv-cyan" id="s-motoristas" style="font-size:2.4rem">0</div>
-    <div class="stat-sub">Disponíveis agora</div>
+  <div class="stat-card">
+    <div class="stat-label">Total Corridas</div>
+    <div class="stat-value">{{ stats.total_corridas }}</div>
+    <div style="font-size:.7rem;color:var(--text3);font-family:var(--mono)">no sistema</div>
   </div>
-  <div class="stat-card c-green">
-    <div class="stat-label">Faturamento</div>
-    <div class="stat-value cv-green" id="s-fat" style="font-size:1.5rem">R$ 0,00</div>
-    <div class="stat-sub">Corridas finalizadas</div>
-  </div>
-  <div class="stat-card c-red">
-    <div class="stat-label">Despesas</div>
-    <div class="stat-value cv-red" id="s-desp" style="font-size:1.5rem">R$ 0,00</div>
-    <div class="stat-sub">Total de custos</div>
-  </div>
-  <div class="stat-card c-blue">
-    <div class="stat-label">Lucro Líquido</div>
-    <div class="stat-value cv-blue" id="s-lucro" style="font-size:1.5rem">R$ 0,00</div>
-    <div class="stat-sub">Faturamento menos despesas</div>
+  <div class="stat-card" style="border-color:rgba(0,230,118,.2)">
+    <div class="stat-label">Receita Total</div>
+    <div class="stat-value" style="color:var(--green);font-size:1.4rem">R$ {{ "%.0f"|format(stats.receita_mes) }}</div>
+    <div style="font-size:.7rem;color:var(--text3);font-family:var(--mono)">concluídas</div>
   </div>
 </div>
 
-<div style="display:grid;grid-template-columns:2fr 1fr;gap:20px">
-  <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-      <h3 style="font-family:'Syne',sans-serif;font-size:1rem;font-weight:700">Últimas Corridas</h3>
-      <a href="/corridas" class="btn btn-ghost btn-sm">Ver todas →</a>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>#</th><th>Paciente</th><th>Motorista</th><th>Data</th><th>Valor</th><th>Status</th></tr></thead>
-        <tbody id="tbody-ultimas"><tr><td colspan="6" class="loading"><div class="spinner"></div> Carregando...</td></tr></tbody>
-      </table>
-    </div>
+<div class="card">
+  <div class="card-header">
+    <span class="card-title" style="color:var(--cyan)">Corridas Recentes</span>
+    <a href="/corridas" class="btn btn-ghost btn-sm">Ver todas</a>
   </div>
-  <div class="card">
-    <h3 style="font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;margin-bottom:20px">Corridas por Status</h3>
-    <div id="status-bars"></div>
-    <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <a href="/corridas" class="btn btn-primary btn-sm">+ Nova Corrida</a>
-        <a href="/relatorio/mensal" target="_blank" class="btn btn-ghost btn-sm">📄 PDF</a>
-        <a href="/export/corridas.xlsx" class="btn btn-ghost btn-sm">↓ Excel</a>
-      </div>
-    </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Paciente</th>
+          <th>Motorista</th>
+          <th>Origem → Destino</th>
+          <th>Serviço</th>
+          <th>Status</th>
+          <th>KM</th>
+          <th>Valor</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in corridas %}
+        <tr>
+          <td><span style="font-family:var(--mono);color:var(--blue)">{{ c.id }}</span></td>
+          <td><strong>{{ c.paciente_nome or '—' }}</strong></td>
+          <td>{{ c.motorista_nome or '—' }}</td>
+          <td style="max-width:200px">
+            <span style="color:var(--text3)">{{ (c.origem or '—')[:20] }}</span>
+            <span style="color:var(--blue)"> → </span>
+            <span>{{ (c.destino or '—')[:20] }}</span>
+          </td>
+          <td><span style="font-size:.7rem;color:var(--text3)">{{ c.tipo_servico or '—' }}</span></td>
+          <td><span class="status status-{{ c.status }}">{{ c.status.replace('_',' ') }}</span></td>
+          <td><span style="font-family:var(--mono);color:var(--text2)">{{ '%.1f'|format(c.km_total or 0) }} km</span></td>
+          <td><span style="color:var(--green);font-family:var(--mono)">R$ {{ '%.0f'|format(c.valor or 0) }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text3)">Nenhuma corrida ainda</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </div>
-{% endblock %}
-{% block scripts %}
-<script>
-const STATUS_LABELS = {agendada:'Agendada',em_andamento:'Em Andamento',finalizada:'Finalizada',cancelada:'Cancelada'};
-const STATUS_COLORS = {agendada:'var(--blue)',em_andamento:'var(--amber)',finalizada:'var(--green)',cancelada:'var(--red)'};
-const STATUS_BADGES = {agendada:'badge-blue',em_andamento:'badge-amber',finalizada:'badge-green',cancelada:'badge-red'};
 
-function fmt(v){ return 'R$ ' + Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2}); }
-
-async function loadDash(){
-  const d = await api('/api/dashboard/stats');
-  if(!d.ok) return;
-  const s = d.stats;
-  document.getElementById('s-total').textContent = s.total_corridas;
-  document.getElementById('s-hoje').textContent = s.corridas_hoje;
-  document.getElementById('s-andamento').textContent = s.em_andamento;
-  document.getElementById('s-pacientes').textContent = s.total_pacientes;
-  document.getElementById('s-motoristas').textContent = s.motoristas_online;
-  document.getElementById('s-fat').textContent = fmt(s.faturamento);
-  document.getElementById('s-desp').textContent = fmt(s.despesas);
-  document.getElementById('s-lucro').textContent = fmt(s.lucro);
-
-  // Últimas corridas
-  const tbody = document.getElementById('tbody-ultimas');
-  if(!d.ultimas_corridas.length){
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">Nenhuma corrida ainda</td></tr>';
-  } else {
-    tbody.innerHTML = d.ultimas_corridas.map(c => `
-      <tr>
-        <td><a href="/corridas" style="color:var(--blue)">#${c.id}</a></td>
-        <td>${c.paciente||'—'}</td>
-        <td>${c.motorista||'—'}</td>
-        <td>${c.data_agendada||'—'}</td>
-        <td>${fmt(c.valor||0)}</td>
-        <td><span class="badge ${STATUS_BADGES[c.status]||'badge-gray'}">${STATUS_LABELS[c.status]||c.status}</span></td>
-      </tr>`).join('');
-  }
-
-  // Barras por status
-  const ps = s.por_status || {};
-  const total = Object.values(ps).reduce((a,b)=>a+b,0)||1;
-  document.getElementById('status-bars').innerHTML = Object.entries(STATUS_LABELS).map(([k,l])=>{
-    const n = ps[k]||0;
-    const pct = Math.round(n/total*100);
-    return `<div style="margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px">
-        <span style="color:var(--text)">${l}</span>
-        <span style="color:var(--muted)">${n}</span>
-      </div>
-      <div style="height:6px;background:rgba(255,255,255,.06);border-radius:999px;overflow:hidden">
-        <div style="height:100%;width:${pct}%;background:${STATUS_COLORS[k]};border-radius:999px;transition:width .6s ease"></div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-loadDash();
-setInterval(loadDash, 30000);
-</script>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+  <a href="/corridas" class="card" style="text-decoration:none;cursor:pointer;display:flex;align-items:center;gap:16px">
+    <div style="width:48px;height:48px;background:var(--blue-glow);border:1px solid var(--border2);border-radius:12px;display:flex;align-items:center;justify-content:center">
+      <svg width="22" height="22" fill="none" stroke="var(--blue)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    </div>
+    <div>
+      <div style="font-size:.85rem;font-weight:800;color:var(--text)">Nova Corrida</div>
+      <div style="font-size:.7rem;color:var(--text3)">Agendar transporte de paciente</div>
+    </div>
+  </a>
+  <a href="/ia" class="card" style="text-decoration:none;cursor:pointer;display:flex;align-items:center;gap:16px;border-color:rgba(0,212,255,.2)">
+    <div style="width:48px;height:48px;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.3);border-radius:12px;display:flex;align-items:center;justify-content:center">
+      <svg width="22" height="22" fill="none" stroke="var(--cyan)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+    </div>
+    <div>
+      <div style="font-size:.85rem;font-weight:800;color:var(--cyan)">IA MEDTRANS</div>
+      <div style="font-size:.7rem;color:var(--text3)">Assistente inteligente integrado</div>
+    </div>
+  </a>
+</div>
 {% endblock %}

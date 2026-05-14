@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block title %}Registrar KM — MEDTRANS 360{% endblock %}
+{% block page_title %}REGISTRAR KM{% endblock %}
+{% block content %}
+<div class="card" style="max-width:600px;margin:0 auto">
+  <div class="card-header">
+    <span class="card-title" style="color:var(--cyan)">Corrida #{{ corrida.id }} — {{ corrida.paciente_nome or '—' }}</span>
+  </div>
+  <p style="font-size:.8rem;color:var(--text3);margin-bottom:20px">Registre o KM do odômetro em cada etapa da corrida.</p>
+  <form method="POST">
+    <div style="display:flex;flex-direction:column;gap:16px">
+      {% set etapas = [
+        ('km_saida_garagem','1. Saiu da Garagem','KM ao sair da base'),
+        ('km_chegada_paciente','2. Chegou ao Paciente','KM ao chegar na origem'),
+        ('km_saida_paciente','3. Saiu com o Paciente','KM ao embarcar o paciente'),
+        ('km_chegada_destino','4. Chegou no Destino','KM ao chegar na clínica/hospital'),
+        ('km_saida_destino','5. Saiu do Destino','KM ao iniciar retorno'),
+        ('km_retorno_garagem','6. Retornou à Garagem','KM final ao chegar na base'),
+      ] %}
+      {% for campo, titulo, desc in etapas %}
+      <div style="display:flex;align-items:center;gap:12px;padding:14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px">
+        <div style="width:36px;height:36px;background:var(--blue-glow);border:1px solid var(--border2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:.7rem;color:var(--blue);flex-shrink:0">
+          {{ loop.index }}
+        </div>
+        <div style="flex:1">
+          <div style="font-size:.8rem;font-weight:700;margin-bottom:2px">{{ titulo }}</div>
+          <div style="font-size:.65rem;color:var(--text3)">{{ desc }}</div>
+        </div>
+        <input type="number" name="{{ campo }}" class="form-control" style="width:120px"
+               placeholder="KM" step="0.1" min="0"
+               value="{{ corrida[campo] or '' }}">
+      </div>
+      {% endfor %}
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:24px">
+      <a href="{{ '/painel/motorista' if perfil == 'motorista' else '/corridas' }}" class="btn btn-ghost">Cancelar</a>
+      <button type="submit" class="btn btn-primary">Salvar KM</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
