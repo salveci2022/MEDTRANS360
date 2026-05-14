@@ -1,309 +1,243 @@
-"""
-MEDTRANS 360 — Plataforma Premium de Transporte de Pacientes
-Versão 2.0 PRO | SpyNet Tecnologia Forense & Soluções Digitais Ltda
-CNPJ: 64.000.808/0001-51
-"""
-import os, json, hashlib, secrets, logging, smtplib, threading
+"""MEDTRANS 360 PRO — v9.0"""
+import os, json, hashlib, secrets, logging, smtplib, threading, urllib.request, urllib.parse
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from flask import (Flask, render_template, request, jsonify,
-                   redirect, url_for, session, make_response)
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, send_file
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from functools import wraps
 from collections import defaultdict
-import time, urllib.request, urllib.parse
-import anthropic
+from io import BytesIO
+import time, anthropic
 
-from database import init_db, get_conn, audit, now_str, hash_senha
+from database import init_db, get_conn, audit, now_str, hoje_str, hash_senha
 
-# ── Configurações de notificação ─────────────────────────
-EMPRESA_WHATSAPP = os.environ.get('EMPRESA_WHATSAPP', '5561993962090')
-EMPRESA_EMAIL    = os.environ.get('EMPRESA_EMAIL', 'medtranscontrole@gmail.com')
-GMAIL_USER       = os.environ.get('GMAIL_USER', '')
-GMAIL_PASS       = os.environ.get('GMAIL_PASS', '')
-ZAPI_INSTANCE    = os.environ.get('ZAPI_INSTANCE', '3F075EE1B3845258CE3BBE013F70DD68')
-ZAPI_TOKEN       = os.environ.get('ZAPI_TOKEN', '')
-ZAPI_CLIENT_TOKEN= os.environ.get('ZAPI_CLIENT_TOKEN', '')
-
-
-# ─────────────────────────────────────────────────────────
-#  NOTIFICAÇÕES — WhatsApp + E-mail
-# ─────────────────────────────────────────────────────────
-
-def enviar_whatsapp(numero, mensagem):
-    """Envia WhatsApp via Z-API em thread separada"""
-    def _send():
-        try:
-            if not ZAPI_TOKEN or not ZAPI_INSTANCE:
-                log.warning("Z-API não configurada — WhatsApp não enviado")
-                return
-            url = f"https://api.z-api.io/instances/{ZAPI_INSTANCE}/token/{ZAPI_TOKEN}/send-text"
-            payload = json.dumps({"phone": numero, "message": mensagem}).encode()
-            req = urllib.request.Request(url, data=payload,
-                headers={"Content-Type": "application/json",
-                         "Client-Token": ZAPI_CLIENT_TOKEN})
-            with urllib.request.urlopen(req, timeout=10) as r:
-                log.info(f"WhatsApp enviado para {numero}: {r.status}")
-        except Exception as e:
-            log.error(f"Erro WhatsApp: {e}")
-    threading.Thread(target=_send, daemon=True).start()
-
-
-def enviar_email(destinatario, assunto, corpo_html):
-    """Envia e-mail via Gmail SMTP em thread separada"""
-    def _send():
-        try:
-            if not GMAIL_USER or not GMAIL_PASS:
-                log.warning("Gmail não configurado — e-mail não enviado")
-                return
-            msg = MIMEMultipart("alternative")
-            msg["Subject"] = assunto
-            msg["From"]    = f"MEDTRANS 360 <{GMAIL_USER}>"
-            msg["To"]      = destinatario
-            msg.attach(MIMEText(corpo_html, "html", "utf-8"))
-            with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as srv:
-                srv.login(GMAIL_USER, GMAIL_PASS)
-                srv.sendmail(GMAIL_USER, destinatario, msg.as_string())
-            log.info(f"E-mail enviado para {destinatario}")
-        except Exception as e:
-            log.error(f"Erro e-mail: {e}")
-    threading.Thread(target=_send, daemon=True).start()
-
-
-def notificar_rota_finalizada(corrida_id, motorista, paciente, destino, km_total=0, valor=0):
-    """Dispara WhatsApp + E-mail quando motorista finaliza rota"""
-    agora = datetime.now(TZ).strftime("%d/%m/%Y às %H:%M")
-
-    # ── WhatsApp ──────────────────────────────────────────
-    msg_wpp = (
-        f"🚑 *MEDTRANS 360 — ROTA FINALIZADA*\n\n"
-        f"✅ Corrida #{corrida_id} concluída!\n"
-        f"👤 Motorista: {motorista}\n"
-        f"🏥 Paciente: {paciente}\n"
-        f"📍 Destino: {destino}\n"
-        f"📏 KM Total: {km_total:.1f} km\n"
-        f"💰 Valor: R$ {valor:.2f}\n"
-        f"🕐 {agora}"
-    )
-    enviar_whatsapp(EMPRESA_WHATSAPP, msg_wpp)
-
-    # ── E-mail ────────────────────────────────────────────
-    corpo = f"""
-    <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;background:#04080f;color:#e8f0fe;padding:24px;border-radius:12px">
-      <div style="text-align:center;margin-bottom:20px">
-        <div style="font-size:1.4rem;font-weight:900;color:#00d4ff;letter-spacing:2px">MEDTRANS 360</div>
-        <div style="font-size:.8rem;color:#4a6080">Sistema de Transporte Médico</div>
-      </div>
-      <div style="background:#0d1a2e;border:1px solid #1a3050;border-radius:10px;padding:20px;margin-bottom:16px">
-        <div style="font-size:1.1rem;font-weight:700;color:#00e676;margin-bottom:16px">✅ Rota #{corrida_id} Finalizada</div>
-        <table style="width:100%;font-size:.85rem;border-collapse:collapse">
-          <tr><td style="padding:6px 0;color:#8ba3c7">Motorista</td><td style="color:#e8f0fe;font-weight:700">{motorista}</td></tr>
-          <tr><td style="padding:6px 0;color:#8ba3c7">Paciente</td><td style="color:#e8f0fe">{paciente}</td></tr>
-          <tr><td style="padding:6px 0;color:#8ba3c7">Destino</td><td style="color:#e8f0fe">{destino}</td></tr>
-          <tr><td style="padding:6px 0;color:#8ba3c7">KM Total</td><td style="color:#00d4ff;font-weight:700">{km_total:.1f} km</td></tr>
-          <tr><td style="padding:6px 0;color:#8ba3c7">Valor</td><td style="color:#00e676;font-weight:700">R$ {valor:.2f}</td></tr>
-          <tr><td style="padding:6px 0;color:#8ba3c7">Data/Hora</td><td style="color:#e8f0fe">{agora}</td></tr>
-        </table>
-      </div>
-      <div style="text-align:center;font-size:.7rem;color:#4a6080">
-        SPYNET Tecnologia Forense · CNPJ 64.000.808/0001-51
-      </div>
-    </div>
-    """
-    enviar_email(
-        EMPRESA_EMAIL,
-        f"[MEDTRANS 360] ✅ Rota #{corrida_id} finalizada — {motorista}",
-        corpo
-    )
-
+# ── Config ────────────────────────────────────────────────
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
-app.config.update(
-    SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE='Lax',
-    PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
-)
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax',
+                  PERMANENT_SESSION_LIFETIME=timedelta(hours=12))
 
 TZ = ZoneInfo('America/Sao_Paulo')
-logging.basicConfig(level=logging.INFO)
 log = logging.getLogger('medtrans')
+logging.basicConfig(level=logging.INFO)
 
-ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
+ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY','')
+EMPRESA_WHATSAPP  = os.environ.get('EMPRESA_WHATSAPP','5561993962090')
+EMPRESA_EMAIL     = os.environ.get('EMPRESA_EMAIL','medtranscontrole@gmail.com')
+GMAIL_USER        = os.environ.get('GMAIL_USER','')
+GMAIL_PASS        = os.environ.get('GMAIL_PASS','')
+ZAPI_INSTANCE     = os.environ.get('ZAPI_INSTANCE','')
+ZAPI_TOKEN        = os.environ.get('ZAPI_TOKEN','')
+ZAPI_CLIENT_TOKEN = os.environ.get('ZAPI_CLIENT_TOKEN','')
 
-# ── Rate limiting ─────────────────────────────────────────
+# ── Rate limit ────────────────────────────────────────────
 _rate = defaultdict(list)
 def rate_limit(key, max_calls=60, window=60):
     now = time.time()
-    _rate[key] = [t for t in _rate[key] if now - t < window]
+    _rate[key] = [t for t in _rate[key] if now-t < window]
     if len(_rate[key]) >= max_calls: return True
-    _rate[key].append(now)
-    return False
+    _rate[key].append(now); return False
 
-def get_ip():
-    return (request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
-            or request.remote_addr or '0.0.0.0')
+def get_ip(): return request.headers.get('X-Forwarded-For','').split(',')[0].strip() or request.remote_addr or '0.0.0.0'
 
-# ── Auth ─────────────────────────────────────────────────
+# ── Auth ──────────────────────────────────────────────────
 def login_required(f):
     @wraps(f)
-    def dec(*a, **kw):
-        if not session.get('user_id'):
-            return redirect(url_for('login'))
-        return f(*a, **kw)
+    def dec(*a,**kw):
+        if not session.get('user_id'): return redirect(url_for('login'))
+        return f(*a,**kw)
     return dec
 
 def perfil_required(*perfis):
     def decorator(f):
         @wraps(f)
-        def dec(*a, **kw):
-            if not session.get('user_id'):
-                return redirect(url_for('login'))
+        def dec(*a,**kw):
+            if not session.get('user_id'): return redirect(url_for('login'))
             if session.get('perfil') not in perfis:
                 return render_template('acesso_negado.html', perfil=session.get('perfil'))
-            return f(*a, **kw)
+            return f(*a,**kw)
         return dec
     return decorator
 
-# ── Headers de segurança ─────────────────────────────────
+# ── Logo ──────────────────────────────────────────────────
+def get_logo_b64():
+    try:
+        p = os.path.join(os.path.dirname(__file__),'static','logo_b64.txt')
+        return open(p).read().strip()
+    except: return ''
+
+@app.context_processor
+def inject_globals():
+    return {'LOGO_B64': get_logo_b64(), 'hoje': hoje_str()}
+
 @app.after_request
 def sec(r):
     r.headers['X-Content-Type-Options'] = 'nosniff'
     r.headers['X-Frame-Options'] = 'SAMEORIGIN'
     return r
 
-# ─────────────────────────────────────────────────────────
-#  ROTAS PÚBLICAS
-# ─────────────────────────────────────────────────────────
+# ── Alertas ───────────────────────────────────────────────
+_alertas = []
+_sistema_status = {'estado':'ativo','pausado_por':None,'pausado_em':None}
+
+def registrar_alerta(tipo, msg, corrida_id=None):
+    _alertas.append({'tipo':tipo,'msg':msg,'corrida_id':corrida_id,'ts':datetime.now(TZ).strftime('%H:%M:%S'),'lido':False})
+    if len(_alertas) > 50: _alertas.pop(0)
+
+# ── Notificações ──────────────────────────────────────────
+def enviar_whatsapp(numero, mensagem):
+    def _s():
+        try:
+            if not ZAPI_TOKEN: return
+            url = f"https://api.z-api.io/instances/{ZAPI_INSTANCE}/token/{ZAPI_TOKEN}/send-text"
+            payload = json.dumps({"phone":numero,"message":mensagem}).encode()
+            req = urllib.request.Request(url, data=payload, headers={"Content-Type":"application/json","Client-Token":ZAPI_CLIENT_TOKEN})
+            urllib.request.urlopen(req, timeout=10)
+        except Exception as e: log.error(f"WhatsApp: {e}")
+    threading.Thread(target=_s, daemon=True).start()
+
+def enviar_email(dest, assunto, html):
+    def _s():
+        try:
+            if not GMAIL_USER: return
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = assunto; msg["From"] = f"MEDTRANS 360 <{GMAIL_USER}>"; msg["To"] = dest
+            msg.attach(MIMEText(html,"html","utf-8"))
+            with smtplib.SMTP_SSL("smtp.gmail.com",465,timeout=10) as srv:
+                srv.login(GMAIL_USER, GMAIL_PASS); srv.sendmail(GMAIL_USER, dest, msg.as_string())
+        except Exception as e: log.error(f"Email: {e}")
+    threading.Thread(target=_s, daemon=True).start()
+
+def notificar_rota_finalizada(cid, mot, pac, dest, km=0, val=0):
+    agora = datetime.now(TZ).strftime("%d/%m/%Y às %H:%M")
+    enviar_whatsapp(EMPRESA_WHATSAPP,
+        f"🚑 *MEDTRANS 360 — ROTA FINALIZADA*\n\n✅ Corrida #{cid}\n👤 Motorista: {mot}\n🏥 Paciente: {pac}\n📍 Destino: {dest}\n📏 KM: {km:.1f}km\n💰 R$ {val:.2f}\n🕐 {agora}")
+    enviar_email(EMPRESA_EMAIL, f"[MEDTRANS 360] ✅ Rota #{cid} finalizada",
+        f"<div style='font-family:Arial;background:#04080f;color:#e8f0fe;padding:24px;border-radius:12px'>"
+        f"<h2 style='color:#00d4ff'>MEDTRANS 360 — Rota #{cid} Finalizada</h2>"
+        f"<p>Motorista: <b>{mot}</b> | Paciente: <b>{pac}</b><br>Destino: {dest} | KM: {km:.1f} | R$ {val:.2f}<br>{agora}</p></div>")
+
+# ═══════════════════════════════════════════════════════════
+#  ROTAS
+# ═══════════════════════════════════════════════════════════
 
 @app.route('/')
 def index():
-    if session.get('user_id'):
-        return redirect(url_for('dashboard'))
-    return redirect(url_for('login'))
+    return redirect(url_for('dashboard') if session.get('user_id') else url_for('login'))
 
-@app.route('/login', methods=['GET', 'POST'])
+@app.route('/login', methods=['GET','POST'])
 def login():
     erro = None
     if request.method == 'POST':
         ip = get_ip()
-        if rate_limit(f'login_{ip}', 10, 60):
-            erro = 'Muitas tentativas. Aguarde 1 minuto.'
+        if rate_limit(f'login_{ip}',10,60):
+            erro = 'Muitas tentativas. Aguarde.'
         else:
-            email = request.form.get('email', '').strip().lower()
-            senha = request.form.get('senha', '')
+            email = request.form.get('email','').strip().lower()
+            senha = request.form.get('senha','')
             conn = get_conn()
-            u = conn.execute(
-                "SELECT * FROM usuarios WHERE email=? AND senha=? AND ativo=1",
-                (email, hash_senha(senha))
-            ).fetchone()
+            u = conn.execute("SELECT * FROM usuarios WHERE email=? AND senha=? AND ativo=1",(email,hash_senha(senha))).fetchone()
             conn.close()
             if u:
                 session.permanent = True
-                session['user_id'] = u['id']
-                session['nome'] = u['nome']
-                session['email'] = u['email']
-                session['perfil'] = u['perfil']
-                audit(u['email'], 'login', '', ip)
-                perfil = u['perfil']
-                if perfil == 'motorista':
-                    return redirect(url_for('painel_motorista'))
-                elif perfil == 'clinica':
-                    return redirect(url_for('painel_clinica'))
-                else:
-                    return redirect(url_for('dashboard'))
-            else:
-                erro = 'E-mail ou senha incorretos.'
-                audit(email, 'login_falhou', '', ip)
+                session.update({'user_id':u['id'],'nome':u['nome'],'email':u['email'],'perfil':u['perfil']})
+                audit(u['email'],'login','',ip)
+                if u['perfil'] == 'motorista': return redirect(url_for('painel_motorista'))
+                if u['perfil'] == 'clinica':   return redirect(url_for('portal_clinica'))
+                return redirect(url_for('dashboard'))
+            erro = 'E-mail ou senha incorretos.'
     return render_template('login.html', erro=erro)
 
 @app.route('/logout')
 def logout():
-    audit(session.get('email', ''), 'logout')
+    audit(session.get('email',''),'logout')
     session.clear()
     return redirect(url_for('login'))
 
-# ─────────────────────────────────────────────────────────
-#  DASHBOARD ADMIN/OPERADOR
-# ─────────────────────────────────────────────────────────
-
+# ── Dashboard ─────────────────────────────────────────────
 @app.route('/dashboard')
-@perfil_required('master', 'operador')
+@perfil_required('master','operador')
 def dashboard():
     conn = get_conn()
+    hoje = hoje_str()
+    # Stats principais
     stats = {
-        'corridas_hoje': conn.execute(
-            "SELECT COUNT(*) FROM corridas WHERE data_agendada LIKE ?",
-            (datetime.now(TZ).strftime('%d/%m/%Y') + '%',)
-        ).fetchone()[0],
-        'em_andamento': conn.execute(
-            "SELECT COUNT(*) FROM corridas WHERE status='em_andamento'"
-        ).fetchone()[0],
-        'motoristas_ativos': conn.execute(
-            "SELECT COUNT(*) FROM motoristas WHERE ativo=1"
-        ).fetchone()[0],
-        'total_corridas': conn.execute("SELECT COUNT(*) FROM corridas").fetchone()[0],
-        'receita_mes': conn.execute(
-            "SELECT COALESCE(SUM(valor),0) FROM corridas WHERE status='concluida'"
-        ).fetchone()[0],
-        'pacientes': conn.execute("SELECT COUNT(*) FROM pacientes").fetchone()[0],
+        'corridas_hoje':  conn.execute("SELECT COUNT(*) FROM corridas WHERE data_agendada=?",(hoje,)).fetchone()[0],
+        'em_andamento':   conn.execute("SELECT COUNT(*) FROM corridas WHERE status='em_andamento'").fetchone()[0],
+        'agendadas':      conn.execute("SELECT COUNT(*) FROM corridas WHERE status='agendada'").fetchone()[0],
+        'concluidas':     conn.execute("SELECT COUNT(*) FROM corridas WHERE status='concluida'").fetchone()[0],
+        'motoristas':     conn.execute("SELECT COUNT(*) FROM motoristas WHERE ativo=1").fetchone()[0],
+        'veiculos':       conn.execute("SELECT COUNT(*) FROM veiculos").fetchone()[0],
+        'pacientes':      conn.execute("SELECT COUNT(*) FROM pacientes").fetchone()[0],
+        'clinicas':       conn.execute("SELECT COUNT(*) FROM clinicas WHERE ativo=1").fetchone()[0],
+        'receita':        conn.execute("SELECT COALESCE(SUM(valor),0) FROM corridas WHERE status='concluida'").fetchone()[0],
+        'km_hoje':        conn.execute("SELECT COALESCE(SUM(km_total),0) FROM corridas WHERE data_agendada=? AND status='concluida'",(hoje,)).fetchone()[0],
+        'km_mes':         conn.execute("SELECT COALESCE(SUM(km_total),0) FROM corridas WHERE status='concluida'").fetchone()[0],
+        'custo_combustivel': conn.execute("SELECT COALESCE(SUM(valor_total),0) FROM combustivel").fetchone()[0],
+        'pendentes':      conn.execute("SELECT COUNT(*) FROM corridas WHERE status='agendada'").fetchone()[0],
     }
-    corridas_recentes = conn.execute("""
-        SELECT c.*, p.nome as paciente_nome, m.nome as motorista_nome,
-               cl.nome as clinica_nome
-        FROM corridas c
-        LEFT JOIN pacientes p ON c.paciente_id=p.id
-        LEFT JOIN motoristas m ON c.motorista_id=m.id
-        LEFT JOIN clinicas cl ON c.clinica_id=cl.id
-        ORDER BY c.id DESC LIMIT 8
-    """).fetchall()
+    # Corridas por dia (7 dias)
+    corridas_semana = []
+    from datetime import datetime as dt, timedelta as td
+    for i in range(6,-1,-1):
+        d = (dt.now(TZ) - td(days=i)).strftime('%d/%m/%Y')
+        n = conn.execute("SELECT COUNT(*) FROM corridas WHERE data_agendada=?",(d,)).fetchone()[0]
+        corridas_semana.append({'dia': (dt.now(TZ) - td(days=i)).strftime('%d/%m'), 'total': n})
+    # Corridas por tipo (pizza)
+    tipos = conn.execute("""SELECT tipo_servico, COUNT(*) as total FROM corridas
+                            WHERE status='concluida' GROUP BY tipo_servico""").fetchall()
+    tipos_data = [{'tipo': t['tipo_servico'], 'total': t['total']} for t in tipos]
+    # Corridas recentes
+    corridas = conn.execute("""SELECT c.*, p.nome as paciente_nome, m.nome as motorista_nome,
+                               v.modelo as veiculo_modelo, cl.nome as clinica_nome
+                               FROM corridas c
+                               LEFT JOIN pacientes p ON c.paciente_id=p.id
+                               LEFT JOIN motoristas m ON c.motorista_id=m.id
+                               LEFT JOIN veiculos v ON c.veiculo_id=v.id
+                               LEFT JOIN clinicas cl ON c.clinica_id=cl.id
+                               ORDER BY c.id DESC LIMIT 6""").fetchall()
     conn.close()
-    return render_template('dashboard.html', stats=stats,
-                           corridas=corridas_recentes,
-                           usuario=session.get('nome'),
-                           perfil=session.get('perfil'))
+    return render_template('dashboard.html', stats=stats, corridas=corridas,
+                           corridas_semana=json.dumps(corridas_semana),
+                           tipos_data=json.dumps(tipos_data),
+                           usuario=session.get('nome'), perfil=session.get('perfil'),
+                           sys_status=_sistema_status['estado'])
 
-# ─────────────────────────────────────────────────────────
-#  CORRIDAS
-# ─────────────────────────────────────────────────────────
-
+# ── Corridas ──────────────────────────────────────────────
 @app.route('/corridas')
-@perfil_required('master', 'operador')
+@perfil_required('master','operador')
 def corridas():
     conn = get_conn()
-    lista = conn.execute("""
-        SELECT c.*, p.nome as paciente_nome, m.nome as motorista_nome,
-               cl.nome as clinica_nome
-        FROM corridas c
-        LEFT JOIN pacientes p ON c.paciente_id=p.id
-        LEFT JOIN motoristas m ON c.motorista_id=m.id
-        LEFT JOIN clinicas cl ON c.clinica_id=cl.id
-        ORDER BY c.id DESC
-    """).fetchall()
-    pacientes = conn.execute("SELECT * FROM pacientes ORDER BY nome").fetchall()
+    lista = conn.execute("""SELECT c.*, p.nome as paciente_nome, m.nome as motorista_nome,
+                            v.modelo as veiculo_modelo, cl.nome as clinica_nome
+                            FROM corridas c
+                            LEFT JOIN pacientes p ON c.paciente_id=p.id
+                            LEFT JOIN motoristas m ON c.motorista_id=m.id
+                            LEFT JOIN veiculos v ON c.veiculo_id=v.id
+                            LEFT JOIN clinicas cl ON c.clinica_id=cl.id
+                            ORDER BY c.id DESC""").fetchall()
+    pacientes  = conn.execute("SELECT * FROM pacientes ORDER BY nome").fetchall()
     motoristas = conn.execute("SELECT * FROM motoristas WHERE ativo=1 ORDER BY nome").fetchall()
-    clinicas = conn.execute("SELECT * FROM clinicas WHERE ativo=1 ORDER BY nome").fetchall()
+    clinicas   = conn.execute("SELECT * FROM clinicas WHERE ativo=1 ORDER BY nome").fetchall()
+    veiculos   = conn.execute("SELECT * FROM veiculos ORDER BY modelo").fetchall()
     conn.close()
-    return render_template('corridas.html', corridas=lista,
-                           pacientes=pacientes, motoristas=motoristas,
-                           clinicas=clinicas, usuario=session.get('nome'),
-                           perfil=session.get('perfil'))
+    return render_template('corridas.html', corridas=lista, pacientes=pacientes,
+                           motoristas=motoristas, clinicas=clinicas, veiculos=veiculos,
+                           usuario=session.get('nome'), perfil=session.get('perfil'))
 
 @app.route('/corridas/nova', methods=['POST'])
-@perfil_required('master', 'operador', 'clinica')
+@perfil_required('master','operador','clinica')
 def nova_corrida():
     d = request.form
     conn = get_conn()
-    conn.execute("""
-        INSERT INTO corridas(paciente_id,motorista_id,clinica_id,origem,destino,
-        tipo_servico,data_agendada,valor,observacoes,status,criado_em)
-        VALUES(?,?,?,?,?,?,?,?,?,'agendada',?)
-    """, (d.get('paciente_id'), d.get('motorista_id'), d.get('clinica_id'),
-          d.get('origem'), d.get('destino'), d.get('tipo_servico'),
-          d.get('data_agendada'), d.get('valor') or 0, d.get('observacoes'), now_str()))
-    conn.commit()
-    conn.close()
-    audit(session.get('email'), 'nova_corrida', f"Destino: {d.get('destino')}", get_ip())
+    conn.execute("""INSERT INTO corridas(paciente_id,motorista_id,veiculo_id,clinica_id,
+                    origem,destino,tipo_servico,data_agendada,valor,observacoes,status,criado_em)
+                    VALUES(?,?,?,?,?,?,?,?,?,'agendada',?,?)""",
+                 (d.get('paciente_id'),d.get('motorista_id'),d.get('veiculo_id'),d.get('clinica_id'),
+                  d.get('origem'),d.get('destino'),d.get('tipo_servico'),d.get('data_agendada'),
+                  d.get('valor') or 0,d.get('observacoes'),now_str()))
+    conn.commit(); conn.close()
     return redirect(url_for('corridas'))
 
 @app.route('/corridas/<int:cid>/status', methods=['POST'])
@@ -312,112 +246,94 @@ def atualizar_status(cid):
     novo_status = request.form.get('status')
     conn = get_conn()
     updates = {'status': novo_status}
-    if novo_status == 'em_andamento':
-        updates['data_inicio'] = now_str()
+    if novo_status == 'em_andamento': updates['data_inicio'] = now_str()
     elif novo_status == 'concluida':
         updates['data_fim'] = now_str()
-        # Buscar dados da corrida para o alerta
-        corrida_info = conn.execute("""
-            SELECT c.*, p.nome as paciente_nome, m.nome as motorista_nome
-            FROM corridas c
-            LEFT JOIN pacientes p ON c.paciente_id=p.id
-            LEFT JOIN motoristas m ON c.motorista_id=m.id
-            WHERE c.id=?
-        """, (cid,)).fetchone()
-        if corrida_info:
-            mot  = corrida_info['motorista_nome'] or '?'
-            pac  = corrida_info['paciente_nome']  or '?'
-            dest = corrida_info['destino']         or '?'
-            km   = corrida_info['km_total']        or 0
-            val  = corrida_info['valor']           or 0
-            # Sino no sistema
-            registrar_alerta('concluida',
-                f"✅ Rota #{cid} FINALIZADA — Motorista: {mot} | Paciente: {pac} | Destino: {dest}",
-                corrida_id=cid)
-            # WhatsApp + E-mail para a empresa
-            notificar_rota_finalizada(cid, mot, pac, dest, km, val)
-    set_clause = ', '.join(f"{k}=?" for k in updates)
-    conn.execute(f"UPDATE corridas SET {set_clause} WHERE id=?",
-                 (*updates.values(), cid))
-    conn.commit()
-    conn.close()
+        c = conn.execute("""SELECT c.*,p.nome as paciente_nome,m.nome as motorista_nome
+                            FROM corridas c LEFT JOIN pacientes p ON c.paciente_id=p.id
+                            LEFT JOIN motoristas m ON c.motorista_id=m.id WHERE c.id=?""",(cid,)).fetchone()
+        if c:
+            mot,pac,dest,km,val = c['motorista_nome'] or '?',c['paciente_nome'] or '?',c['destino'] or '?',c['km_total'] or 0,c['valor'] or 0
+            registrar_alerta('concluida',f"✅ Rota #{cid} FINALIZADA — Motorista: {mot} | Paciente: {pac} | Destino: {dest}",corrida_id=cid)
+            notificar_rota_finalizada(cid,mot,pac,dest,km,val)
+    sc = ', '.join(f"{k}=?" for k in updates)
+    conn.execute(f"UPDATE corridas SET {sc} WHERE id=?",(*updates.values(),cid))
+    conn.commit(); conn.close()
     return redirect(request.referrer or url_for('dashboard'))
 
-@app.route('/corridas/<int:cid>/km', methods=['GET', 'POST'])
+@app.route('/corridas/<int:cid>/km', methods=['GET','POST'])
 @login_required
 def registrar_km(cid):
     conn = get_conn()
-    corrida = conn.execute("""
-        SELECT c.*, p.nome as paciente_nome, m.nome as motorista_nome
-        FROM corridas c
-        LEFT JOIN pacientes p ON c.paciente_id=p.id
-        LEFT JOIN motoristas m ON c.motorista_id=m.id
-        WHERE c.id=?
-    """, (cid,)).fetchone()
-    if not corrida:
-        conn.close()
-        return redirect(url_for('dashboard'))
+    c = conn.execute("""SELECT c.*,p.nome as paciente_nome,m.nome as motorista_nome
+                        FROM corridas c LEFT JOIN pacientes p ON c.paciente_id=p.id
+                        LEFT JOIN motoristas m ON c.motorista_id=m.id WHERE c.id=?""",(cid,)).fetchone()
+    if not c: conn.close(); return redirect(url_for('dashboard'))
     if request.method == 'POST':
-        campos = ['km_saida_garagem', 'km_chegada_paciente', 'km_saida_paciente',
-                  'km_chegada_destino', 'km_saida_destino', 'km_retorno_garagem']
+        campos = ['km_saida_garagem','km_chegada_paciente','km_saida_paciente','km_chegada_destino','km_saida_destino','km_retorno_garagem']
         vals = {}
-        for c in campos:
-            v = request.form.get(c)
+        for campo in campos:
+            v = request.form.get(campo)
             if v:
-                try:
-                    vals[c] = float(v)
-                except:
-                    pass
-        # Calcular KM total
-        km_total = 0
-        ks = vals.get('km_saida_garagem', corrida['km_saida_garagem'] or 0)
-        kr = vals.get('km_retorno_garagem', corrida['km_retorno_garagem'] or 0)
-        if ks and kr:
-            km_total = kr - ks
-        vals['km_total'] = km_total
+                try: vals[campo] = float(v)
+                except: pass
+        ks = vals.get('km_saida_garagem', c['km_saida_garagem'] or 0)
+        kr = vals.get('km_retorno_garagem', c['km_retorno_garagem'] or 0)
+        vals['km_total'] = max(0, kr - ks) if ks and kr else 0
         if vals:
-            set_clause = ', '.join(f"{k}=?" for k in vals)
-            conn.execute(f"UPDATE corridas SET {set_clause} WHERE id=?",
-                         (*vals.values(), cid))
+            sc = ', '.join(f"{k}=?" for k in vals)
+            conn.execute(f"UPDATE corridas SET {sc} WHERE id=?",(*vals.values(),cid))
             conn.commit()
         conn.close()
-        return redirect(url_for('painel_motorista') if session.get('perfil') == 'motorista' else url_for('corridas'))
+        return redirect(url_for('painel_motorista') if session.get('perfil')=='motorista' else url_for('corridas'))
     conn.close()
-    return render_template('km_etapas.html', corrida=corrida,
-                           usuario=session.get('nome'), perfil=session.get('perfil'))
+    return render_template('km_etapas.html', corrida=c, usuario=session.get('nome'), perfil=session.get('perfil'))
 
-# ─────────────────────────────────────────────────────────
-#  MOTORISTAS
-# ─────────────────────────────────────────────────────────
-
+# ── Motoristas ────────────────────────────────────────────
 @app.route('/motoristas')
-@perfil_required('master', 'operador')
+@perfil_required('master','operador')
 def motoristas():
     conn = get_conn()
-    lista = conn.execute("SELECT * FROM motoristas ORDER BY nome").fetchall()
+    lista = conn.execute("""SELECT m.*, v.modelo as veiculo_modelo, v.placa FROM motoristas m
+                            LEFT JOIN veiculos v ON m.veiculo_id=v.id ORDER BY m.nome""").fetchall()
+    veiculos = conn.execute("SELECT * FROM veiculos ORDER BY modelo").fetchall()
     conn.close()
-    return render_template('motoristas.html', motoristas=lista,
+    return render_template('motoristas.html', motoristas=lista, veiculos=veiculos,
                            usuario=session.get('nome'), perfil=session.get('perfil'))
 
 @app.route('/motoristas/novo', methods=['POST'])
-@perfil_required('master', 'operador')
+@perfil_required('master','operador')
 def novo_motorista():
     d = request.form
     conn = get_conn()
-    conn.execute("""INSERT INTO motoristas(nome,cnh,telefone,veiculo,placa,criado_em)
-                    VALUES(?,?,?,?,?,?)""",
-                 (d.get('nome'), d.get('cnh'), d.get('telefone'),
-                  d.get('veiculo'), d.get('placa'), now_str()))
-    conn.commit()
-    conn.close()
+    conn.execute("INSERT INTO motoristas(nome,cnh,telefone,veiculo_id,criado_em) VALUES(?,?,?,?,?)",
+                 (d.get('nome'),d.get('cnh'),d.get('telefone'),d.get('veiculo_id') or None,now_str()))
+    conn.commit(); conn.close()
     return redirect(url_for('motoristas'))
 
-# ─────────────────────────────────────────────────────────
-#  PACIENTES
-# ─────────────────────────────────────────────────────────
+# ── Veículos ──────────────────────────────────────────────
+@app.route('/veiculos')
+@perfil_required('master','operador')
+def veiculos():
+    conn = get_conn()
+    lista = conn.execute("SELECT * FROM veiculos ORDER BY modelo").fetchall()
+    conn.close()
+    return render_template('veiculos.html', veiculos=lista,
+                           usuario=session.get('nome'), perfil=session.get('perfil'))
 
+@app.route('/veiculos/novo', methods=['POST'])
+@perfil_required('master','operador')
+def novo_veiculo():
+    d = request.form
+    conn = get_conn()
+    conn.execute("INSERT INTO veiculos(modelo,placa,ano,tipo,km_atual,criado_em) VALUES(?,?,?,?,?,?)",
+                 (d.get('modelo'),d.get('placa'),d.get('ano'),d.get('tipo'),d.get('km_atual') or 0,now_str()))
+    conn.commit(); conn.close()
+    return redirect(url_for('veiculos'))
+
+# ── Pacientes ─────────────────────────────────────────────
 @app.route('/pacientes')
-@perfil_required('master', 'operador')
+@perfil_required('master','operador')
 def pacientes():
     conn = get_conn()
     lista = conn.execute("SELECT * FROM pacientes ORDER BY nome").fetchall()
@@ -426,230 +342,275 @@ def pacientes():
                            usuario=session.get('nome'), perfil=session.get('perfil'))
 
 @app.route('/pacientes/novo', methods=['POST'])
-@perfil_required('master', 'operador', 'clinica')
+@perfil_required('master','operador','clinica')
 def novo_paciente():
     d = request.form
     conn = get_conn()
-    conn.execute("""INSERT INTO pacientes(nome,cpf,telefone,endereco,convenio,observacoes,criado_em)
-                    VALUES(?,?,?,?,?,?,?)""",
-                 (d.get('nome'), d.get('cpf'), d.get('telefone'),
-                  d.get('endereco'), d.get('convenio'), d.get('observacoes'), now_str()))
-    conn.commit()
-    conn.close()
+    conn.execute("INSERT INTO pacientes(nome,cpf,telefone,endereco,convenio,prioridade,observacoes,criado_em) VALUES(?,?,?,?,?,?,?,?)",
+                 (d.get('nome'),d.get('cpf'),d.get('telefone'),d.get('endereco'),d.get('convenio'),d.get('prioridade','normal'),d.get('observacoes'),now_str()))
+    conn.commit(); conn.close()
     return redirect(url_for('pacientes'))
 
-# ─────────────────────────────────────────────────────────
-#  PAINÉIS POR PERFIL
-# ─────────────────────────────────────────────────────────
-
-@app.route('/painel/motorista')
-@perfil_required('master', 'operador', 'motorista')
-def painel_motorista():
+# ── Clínicas ──────────────────────────────────────────────
+@app.route('/clinicas')
+@perfil_required('master','operador')
+def clinicas():
     conn = get_conn()
-    corridas = conn.execute("""
-        SELECT c.*, p.nome as paciente_nome, cl.nome as clinica_nome
-        FROM corridas c
-        LEFT JOIN pacientes p ON c.paciente_id=p.id
-        LEFT JOIN clinicas cl ON c.clinica_id=cl.id
-        WHERE c.status IN ('agendada','em_andamento')
-        ORDER BY c.id DESC
-    """).fetchall()
+    lista = conn.execute("SELECT * FROM clinicas ORDER BY nome").fetchall()
     conn.close()
-    return render_template('painel_motorista.html', corridas=corridas,
+    return render_template('clinicas.html', clinicas=lista,
                            usuario=session.get('nome'), perfil=session.get('perfil'))
 
-@app.route('/painel/clinica')
-@perfil_required('master', 'operador', 'clinica')
-def painel_clinica():
+@app.route('/clinicas/nova', methods=['POST'])
+@perfil_required('master','operador')
+def nova_clinica():
+    d = request.form
     conn = get_conn()
-    corridas = conn.execute("""
-        SELECT c.*, p.nome as paciente_nome, m.nome as motorista_nome
-        FROM corridas c
-        LEFT JOIN pacientes p ON c.paciente_id=p.id
-        LEFT JOIN motoristas m ON c.motorista_id=m.id
-        ORDER BY c.id DESC LIMIT 20
-    """).fetchall()
-    pacientes = conn.execute("SELECT * FROM pacientes ORDER BY nome").fetchall()
+    conn.execute("INSERT INTO clinicas(nome,cnpj,telefone,endereco,responsavel,email,criado_em) VALUES(?,?,?,?,?,?,?)",
+                 (d.get('nome'),d.get('cnpj'),d.get('telefone'),d.get('endereco'),d.get('responsavel'),d.get('email'),now_str()))
+    conn.commit(); conn.close()
+    return redirect(url_for('clinicas'))
+
+# ── Combustível ───────────────────────────────────────────
+@app.route('/combustivel')
+@perfil_required('master','operador')
+def combustivel():
+    conn = get_conn()
+    lista = conn.execute("""SELECT c.*, v.modelo, v.placa, m.nome as motorista_nome
+                            FROM combustivel c LEFT JOIN veiculos v ON c.veiculo_id=v.id
+                            LEFT JOIN motoristas m ON c.motorista_id=m.id ORDER BY c.id DESC""").fetchall()
+    veiculos   = conn.execute("SELECT * FROM veiculos ORDER BY modelo").fetchall()
+    motoristas = conn.execute("SELECT * FROM motoristas WHERE ativo=1 ORDER BY nome").fetchall()
+    total_gasto = conn.execute("SELECT COALESCE(SUM(valor_total),0) FROM combustivel").fetchone()[0]
+    conn.close()
+    return render_template('combustivel.html', lista=lista, veiculos=veiculos,
+                           motoristas=motoristas, total_gasto=total_gasto,
+                           usuario=session.get('nome'), perfil=session.get('perfil'))
+
+@app.route('/combustivel/novo', methods=['POST'])
+@perfil_required('master','operador','motorista')
+def novo_abastecimento():
+    d = request.form
+    litros     = float(d.get('litros') or 0)
+    valor_litro= float(d.get('valor_litro') or 0)
+    conn = get_conn()
+    conn.execute("""INSERT INTO combustivel(veiculo_id,motorista_id,litros,valor_litro,valor_total,
+                    km_atual,tipo_combustivel,posto,data,criado_em) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                 (d.get('veiculo_id'),d.get('motorista_id'),litros,valor_litro,
+                  litros*valor_litro,d.get('km_atual') or 0,d.get('tipo_combustivel','gasolina'),
+                  d.get('posto'),d.get('data') or hoje_str(),now_str()))
+    conn.commit(); conn.close()
+    return redirect(url_for('combustivel'))
+
+# ── Checklist ─────────────────────────────────────────────
+@app.route('/checklist')
+@perfil_required('master','operador','motorista')
+def checklist():
+    conn = get_conn()
+    lista = conn.execute("""SELECT c.*, v.modelo, v.placa, m.nome as motorista_nome
+                            FROM checklist c LEFT JOIN veiculos v ON c.veiculo_id=v.id
+                            LEFT JOIN motoristas m ON c.motorista_id=m.id ORDER BY c.id DESC""").fetchall()
+    veiculos   = conn.execute("SELECT * FROM veiculos ORDER BY modelo").fetchall()
+    motoristas = conn.execute("SELECT * FROM motoristas WHERE ativo=1 ORDER BY nome").fetchall()
+    conn.close()
+    return render_template('checklist.html', lista=lista, veiculos=veiculos,
+                           motoristas=motoristas,
+                           usuario=session.get('nome'), perfil=session.get('perfil'))
+
+@app.route('/checklist/novo', methods=['POST'])
+@perfil_required('master','operador','motorista')
+def novo_checklist():
+    d = request.form
+    def cb(f): return 1 if d.get(f) else 0
+    conn = get_conn()
+    conn.execute("""INSERT INTO checklist(veiculo_id,motorista_id,data,pneus,oleo,freios,agua,
+                    bateria,luzes,limpadores,documentos,kit_primeiros_socorros,extintor,obs,criado_em)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                 (d.get('veiculo_id'),d.get('motorista_id'),d.get('data') or hoje_str(),
+                  cb('pneus'),cb('oleo'),cb('freios'),cb('agua'),cb('bateria'),
+                  cb('luzes'),cb('limpadores'),cb('documentos'),cb('kit'),cb('extintor'),
+                  d.get('obs'),now_str()))
+    conn.commit(); conn.close()
+    return redirect(url_for('checklist'))
+
+# ── Painéis ───────────────────────────────────────────────
+@app.route('/painel/motorista')
+@perfil_required('master','operador','motorista')
+def painel_motorista():
+    conn = get_conn()
+    corridas_ativas = conn.execute("""SELECT c.*,p.nome as paciente_nome,cl.nome as clinica_nome
+                                      FROM corridas c LEFT JOIN pacientes p ON c.paciente_id=p.id
+                                      LEFT JOIN clinicas cl ON c.clinica_id=cl.id
+                                      WHERE c.status IN ('agendada','em_andamento') ORDER BY c.id DESC""").fetchall()
+    veiculos   = conn.execute("SELECT * FROM veiculos ORDER BY modelo").fetchall()
+    motoristas = conn.execute("SELECT * FROM motoristas WHERE ativo=1 ORDER BY nome").fetchall()
+    conn.close()
+    return render_template('painel_motorista.html', corridas=corridas_ativas,
+                           veiculos=veiculos, motoristas=motoristas,
+                           usuario=session.get('nome'), perfil=session.get('perfil'))
+
+@app.route('/portal/clinica')
+@perfil_required('master','operador','clinica')
+def portal_clinica():
+    conn = get_conn()
+    corridas = conn.execute("""SELECT c.*,p.nome as paciente_nome,m.nome as motorista_nome
+                               FROM corridas c LEFT JOIN pacientes p ON c.paciente_id=p.id
+                               LEFT JOIN motoristas m ON c.motorista_id=m.id
+                               ORDER BY c.id DESC LIMIT 30""").fetchall()
+    pacientes  = conn.execute("SELECT * FROM pacientes ORDER BY nome").fetchall()
     motoristas = conn.execute("SELECT * FROM motoristas WHERE ativo=1").fetchall()
     conn.close()
-    return render_template('painel_clinica.html', corridas=corridas,
+    return render_template('portal_clinica.html', corridas=corridas,
                            pacientes=pacientes, motoristas=motoristas,
                            usuario=session.get('nome'), perfil=session.get('perfil'))
 
-# ─────────────────────────────────────────────────────────
-#  IA MEDTRANS
-# ─────────────────────────────────────────────────────────
-
+# ── IA ────────────────────────────────────────────────────
 @app.route('/ia')
 @login_required
 def ia():
     conn = get_conn()
-    historico = conn.execute(
-        "SELECT * FROM chat_ia WHERE usuario_id=? ORDER BY id DESC LIMIT 20",
-        (session.get('user_id'),)
-    ).fetchall()
+    hist = conn.execute("SELECT * FROM chat_ia WHERE usuario_id=? ORDER BY id DESC LIMIT 20",(session.get('user_id'),)).fetchall()
     conn.close()
-    return render_template('ia.html', historico=list(reversed(historico)),
+    return render_template('ia.html', historico=list(reversed(hist)),
                            usuario=session.get('nome'), perfil=session.get('perfil'))
 
 @app.route('/ia/chat', methods=['POST'])
 @login_required
 def ia_chat():
-    if rate_limit(f"ia_{session.get('user_id')}", 20, 60):
-        return jsonify({'erro': 'Limite de mensagens atingido. Aguarde 1 minuto.'}), 429
-    
-    data = request.get_json()
-    msg = (data.get('mensagem') or '').strip()[:1000]
-    if not msg:
-        return jsonify({'erro': 'Mensagem vazia'}), 400
-
+    if rate_limit(f"ia_{session.get('user_id')}",20,60):
+        return jsonify({'erro':'Limite atingido'}), 429
+    d = request.get_json()
+    msg = (d.get('mensagem') or '').strip()[:1000]
+    if not msg: return jsonify({'erro':'Vazio'}), 400
     conn = get_conn()
-    historico = conn.execute(
-        "SELECT role, conteudo FROM chat_ia WHERE usuario_id=? ORDER BY id DESC LIMIT 10",
-        (session.get('user_id'),)
-    ).fetchall()
-    historico = list(reversed(historico))
-
-    messages = [{'role': h['role'], 'content': h['conteudo']} for h in historico]
-    messages.append({'role': 'user', 'content': msg})
-
+    hist = list(reversed(conn.execute("SELECT role,conteudo FROM chat_ia WHERE usuario_id=? ORDER BY id DESC LIMIT 10",(session.get('user_id'),)).fetchall()))
+    messages = [{'role':h['role'],'content':h['conteudo']} for h in hist]
+    messages.append({'role':'user','content':msg})
     try:
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-        resp = client.messages.create(
-            model='claude-sonnet-4-20250514',
-            max_tokens=1000,
-            system="""Você é a IA MEDTRANS — assistente especializada em transporte de pacientes, 
-            logística médica e gestão de saúde. Ajuda operadores, motoristas e clínicas com:
-            - Gestão de corridas e rotas
-            - Protocolos com pacientes especiais (hemodiálise, oncologia, emergências)
-            - Cálculo de custos e distâncias
-            - Conformidade ANVISA e CFM para transporte médico
-            - Dicas de atendimento humanizado
-            Seja objetivo, profissional e sempre em português brasileiro.""",
-            messages=messages
-        )
-        resposta = resp.content[0].text
-
-        conn.execute("INSERT INTO chat_ia(usuario_id,role,conteudo,criado_em) VALUES(?,?,?,?)",
-                     (session.get('user_id'), 'user', msg, now_str()))
-        conn.execute("INSERT INTO chat_ia(usuario_id,role,conteudo,criado_em) VALUES(?,?,?,?)",
-                     (session.get('user_id'), 'assistant', resposta, now_str()))
-        conn.commit()
-        conn.close()
-        return jsonify({'resposta': resposta})
+        r = client.messages.create(model='claude-sonnet-4-20250514', max_tokens=1000,
+            system="Você é a IA MEDTRANS — assistente especializada em transporte médico, logística hospitalar e gestão de saúde. Responda sempre em português brasileiro de forma objetiva e profissional.",
+            messages=messages)
+        resp = r.content[0].text
+        conn.execute("INSERT INTO chat_ia(usuario_id,role,conteudo,criado_em) VALUES(?,?,?,?)",(session.get('user_id'),'user',msg,now_str()))
+        conn.execute("INSERT INTO chat_ia(usuario_id,role,conteudo,criado_em) VALUES(?,?,?,?)",(session.get('user_id'),'assistant',resp,now_str()))
+        conn.commit(); conn.close()
+        return jsonify({'resposta':resp})
     except Exception as e:
         conn.close()
-        log.error(f"IA erro: {e}")
-        return jsonify({'erro': f'Erro na IA: {str(e)}'}), 500
+        return jsonify({'erro':str(e)}), 500
 
-# ─────────────────────────────────────────────────────────
-#  FINANCEIRO
-# ─────────────────────────────────────────────────────────
-
-@app.route('/financeiro')
-@perfil_required('master', 'operador')
-def financeiro():
-    conn = get_conn()
-    corridas = conn.execute("""
-        SELECT c.*, p.nome as paciente_nome, m.nome as motorista_nome
-        FROM corridas c
-        LEFT JOIN pacientes p ON c.paciente_id=p.id
-        LEFT JOIN motoristas m ON c.motorista_id=m.id
-        WHERE c.status='concluida'
-        ORDER BY c.id DESC
-    """).fetchall()
-    total = conn.execute(
-        "SELECT COALESCE(SUM(valor),0) FROM corridas WHERE status='concluida'"
-    ).fetchone()[0]
-    conn.close()
-    return render_template('financeiro.html', corridas=corridas, total=total,
-                           usuario=session.get('nome'), perfil=session.get('perfil'))
-
-# ─────────────────────────────────────────────────────────
-#  API JSON
-# ─────────────────────────────────────────────────────────
-
-@app.route('/api/stats')
+# ── API ───────────────────────────────────────────────────
+@app.route('/api/alertas')
 @login_required
-def api_stats():
-    conn = get_conn()
-    data = {
-        'em_andamento': conn.execute("SELECT COUNT(*) FROM corridas WHERE status='em_andamento'").fetchone()[0],
-        'agendadas': conn.execute("SELECT COUNT(*) FROM corridas WHERE status='agendada'").fetchone()[0],
-        'concluidas_hoje': conn.execute(
-            "SELECT COUNT(*) FROM corridas WHERE status='concluida' AND data_fim LIKE ?",
-            (datetime.now(TZ).strftime('%d/%m/%Y') + '%',)
-        ).fetchone()[0],
-    }
-    conn.close()
-    return jsonify(data)
+def api_alertas():
+    nl = [a for a in _alertas if not a['lido']]
+    return jsonify({'alertas':nl,'total':len(nl)})
 
-# ─────────────────────────────────────────────────────────
-#  ACESSO NEGADO
-# ─────────────────────────────────────────────────────────
+@app.route('/api/alertas/limpar', methods=['POST'])
+@login_required
+def limpar_alertas_api():
+    for a in _alertas: a['lido'] = True
+    return jsonify({'ok':True})
+
+@app.route('/api/operacao/<acao>', methods=['POST'])
+@perfil_required('master','operador')
+def controle_operacao(acao):
+    global _sistema_status
+    usuario = session.get('nome','?')
+    msgs = {'iniciar':('ativo','▶️ Sistema INICIADO'),'pausar':('pausado','⏸️ Sistema PAUSADO'),
+            'reiniciar':('ativo','🔄 Sistema REINICIADO'),'finalizar':('finalizado','⏹️ Operação FINALIZADA'),
+            'limpar_alertas':None,'limpar_logs':None}
+    if acao not in msgs: return jsonify({'erro':'Inválido'}), 400
+    if acao in ('limpar_alertas',): _alertas.clear()
+    elif acao == 'limpar_logs':
+        conn = get_conn(); conn.execute("DELETE FROM audit_log"); conn.commit(); conn.close()
+        registrar_alerta('info',f'🗑️ Logs limpos por {usuario}')
+    else:
+        estado, msg_txt = msgs[acao]
+        _sistema_status = {'estado':estado,'pausado_por':usuario,'pausado_em':now_str()}
+        registrar_alerta('info',f'{msg_txt} por {usuario}')
+    audit(session.get('email'),f'operacao_{acao}','',get_ip())
+    return jsonify({'ok':True,'estado':_sistema_status['estado']})
+
+@app.route('/api/sistema/status')
+@login_required
+def sistema_status():
+    return jsonify(_sistema_status)
+
+# ── PDF ───────────────────────────────────────────────────
+@app.route('/relatorio/pdf')
+@perfil_required('master','operador')
+def relatorio_pdf():
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable
+    from reportlab.lib.enums import TA_CENTER
+
+    conn = get_conn()
+    corridas = [dict(r) for r in conn.execute("""SELECT c.*,p.nome as paciente_nome,m.nome as motorista_nome
+                FROM corridas c LEFT JOIN pacientes p ON c.paciente_id=p.id
+                LEFT JOIN motoristas m ON c.motorista_id=m.id ORDER BY c.id DESC""").fetchall()]
+    stats = {'total':len(corridas),'concluidas':sum(1 for c in corridas if c['status']=='concluida'),
+             'andamento':sum(1 for c in corridas if c['status']=='em_andamento'),
+             'receita':sum(c['valor'] or 0 for c in corridas if c['status']=='concluida')}
+    conn.close()
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=2*cm, rightMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
+    styles = getSampleStyleSheet()
+    azul  = colors.HexColor('#0066ff'); dark = colors.HexColor('#0d1a2e')
+    cinza = colors.HexColor('#8ba3c7'); verde= colors.HexColor('#00e676')
+
+    def P(txt, sz=9, bold=False, color=None, align=TA_CENTER):
+        fn = 'Helvetica-Bold' if bold else 'Helvetica'
+        c  = color or colors.HexColor('#c8d8f0')
+        return Paragraph(txt, ParagraphStyle('p', fontSize=sz, fontName=fn, textColor=c, alignment=align))
+
+    story = [
+        P('MEDTRANS 360', 22, True, azul),
+        P('Relatório Operacional Completo', 10, False, cinza),
+        P(f'Gerado em {now_str()}', 8, False, cinza),
+        HRFlowable(width='100%', thickness=1, color=azul, spaceAfter=12),
+    ]
+
+    stat_t = Table([[P('TOTAL',7,True,cinza),P('CONCLUÍDAS',7,True,cinza),P('EM ANDAMENTO',7,True,cinza),P('RECEITA',7,True,cinza)],
+                     [P(str(stats['total']),20,True,colors.HexColor('#00d4ff')),P(str(stats['concluidas']),20,True,verde),
+                      P(str(stats['andamento']),20,True,azul),P(f"R$ {stats['receita']:.0f}",16,True,verde)]],
+                   colWidths=[4.1*cm]*4, rowHeights=[18,32])
+    stat_t.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),dark),('GRID',(0,0),(-1,-1),0.5,colors.HexColor('#1a3050')),
+                                 ('ALIGN',(0,0),(-1,-1),'CENTER'),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+                                 ('TOPPADDING',(0,0),(-1,-1),8),('BOTTOMPADDING',(0,0),(-1,-1),8)]))
+    story += [stat_t, Spacer(1,14), P('CORRIDAS REGISTRADAS',10,True,colors.HexColor('#00d4ff'),0)]
+
+    rows = [[P(h,7,True,azul) for h in ['#','Paciente','Motorista','Destino','Tipo','Status','KM','Valor']]]
+    for c in corridas:
+        rows.append([P(str(c['id']),7), P((c['paciente_nome'] or '—')[:18],7),
+                     P((c['motorista_nome'] or '—')[:16],7), P((c['destino'] or '—')[:20],7),
+                     P((c['tipo_servico'] or '—')[:14],7), P((c['status'] or '').replace('_',' '),7),
+                     P(f"{c['km_total'] or 0:.1f}",7), P(f"R${c['valor'] or 0:.0f}",7,True,verde)])
+    t = Table(rows, colWidths=[1*cm,3.2*cm,3*cm,3.2*cm,2.5*cm,2.2*cm,1.6*cm,1.5*cm], repeatRows=1)
+    t.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#0c1526')),
+                            ('BACKGROUND',(0,1),(-1,-1),dark),('ROWBACKGROUNDS',(0,1),(-1,-1),[dark,colors.HexColor('#102035')]),
+                            ('GRID',(0,0),(-1,-1),0.3,colors.HexColor('#1a3050')),
+                            ('ALIGN',(0,0),(-1,-1),'CENTER'),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+                            ('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5)]))
+    story += [t, Spacer(1,20), HRFlowable(width='100%',thickness=0.5,color=cinza), Spacer(1,6),
+              P('SPYNET Tecnologia Forense · CNPJ 64.000.808/0001-51 · medtranscontrole@gmail.com',7,False,cinza),
+              P('Documento gerado automaticamente pelo sistema MEDTRANS 360',7,False,cinza)]
+    doc.build(story)
+    buf.seek(0)
+    return send_file(buf, mimetype='application/pdf', as_attachment=True,
+                     download_name=f'MEDTRANS360-{datetime.now(TZ).strftime("%Y%m%d-%H%M")}.pdf')
 
 @app.route('/acesso-negado')
 def acesso_negado():
-    return render_template('acesso_negado.html', perfil=session.get('perfil', ''))
-
-# ─────────────────────────────────────────────────────────
-#  INIT
-# ─────────────────────────────────────────────────────────
+    return render_template('acesso_negado.html', perfil=session.get('perfil',''))
 
 with app.app_context():
     init_db()
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
-
-# ─────────────────────────────────────────────────────────
-#  LOGO BASE64
-# ─────────────────────────────────────────────────────────
-import base64 as _b64
-
-def get_logo_b64():
-    try:
-        logo_path = os.path.join(os.path.dirname(__file__), 'static', 'logo_b64.txt')
-        with open(logo_path, 'r') as f:
-            return f.read().strip()
-    except:
-        return ''
-
-@app.context_processor
-def inject_logo():
-    return {'LOGO_B64': get_logo_b64()}
-
-# ─────────────────────────────────────────────────────────
-#  NOTIFICAÇÃO — ROTA FINALIZADA
-# ─────────────────────────────────────────────────────────
-import threading
-
-_alertas = []  # fila de alertas em memória
-
-def registrar_alerta(tipo, msg, corrida_id=None):
-    from datetime import datetime
-    _alertas.append({
-        'tipo': tipo,
-        'msg': msg,
-        'corrida_id': corrida_id,
-        'ts': datetime.now(TZ).strftime('%H:%M:%S'),
-        'lido': False,
-    })
-    # Mantém só os últimos 50
-    if len(_alertas) > 50:
-        _alertas.pop(0)
-
-@app.route('/api/alertas')
-@login_required
-def api_alertas():
-    nao_lidos = [a for a in _alertas if not a['lido']]
-    return jsonify({'alertas': nao_lidos, 'total': len(nao_lidos)})
-
-@app.route('/api/alertas/limpar', methods=['POST'])
-@login_required
-def limpar_alertas():
-    for a in _alertas:
-        a['lido'] = True
-    return jsonify({'ok': True})
-
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT',5000)), debug=False)

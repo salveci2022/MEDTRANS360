@@ -25,7 +25,7 @@
           <td>{{ m.telefone or '—' }}</td>
           <td>{{ m.veiculo or '—' }}</td>
           <td><span style="font-family:var(--mono);color:var(--cyan)">{{ m.placa or '—' }}</span></td>
-          <td><span class="status {{ 'status-concluida' if m.ativo else 'status-cancelada' }}">{{ 'Ativo' if m.ativo else 'Inativo' }}</span></td>
+          <td><span class="status {{ 's-concluida' if m.ativo else 's-cancelada' }}">{{ 'Ativo' if m.ativo else 'Inativo' }}</span></td>
         </tr>
         {% else %}
         <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3)">Nenhum motorista cadastrado</td></tr>

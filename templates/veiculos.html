@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block title %}Veículos — MEDTRANS 360{% endblock %}
+{% block page_title %}Veículos · Frota{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+  <div style="font-size:1rem;font-weight:700">{{ veiculos|length }} veículo(s) cadastrado(s)</div>
+  <button class="btn btn-teal" onclick="document.getElementById('modal-novo').classList.add('open')">+ Novo Veículo</button>
+</div>
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Modelo</th><th>Placa</th><th>Ano</th><th>Tipo</th><th>KM Atual</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for v in veiculos %}
+        <tr>
+          <td style="color:var(--teal);font-weight:600">{{ v.id }}</td>
+          <td><strong>{{ v.modelo }}</strong></td>
+          <td style="font-family:monospace;color:var(--cyan)">{{ v.placa or '—' }}</td>
+          <td>{{ v.ano or '—' }}</td>
+          <td style="color:var(--text3);font-size:.72rem;text-transform:capitalize">{{ v.tipo or '—' }}</td>
+          <td style="font-family:monospace">{{ '%.0f'|format(v.km_atual or 0) }} km</td>
+          <td><span class="status s-{{ v.status or 'disponivel' }}">{{ (v.status or 'disponivel').replace('_',' ') }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Nenhum veículo</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<div class="modal-overlay" id="modal-novo" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal">
+    <div class="modal-title">Novo Veículo</div>
+    <form method="POST" action="/veiculos/novo">
+      <div class="form-grid">
+        <div class="form-group form-full"><label class="form-label">Modelo</label><input type="text" name="modelo" class="form-control" required></div>
+        <div class="form-group"><label class="form-label">Placa</label><input type="text" name="placa" class="form-control"></div>
+        <div class="form-group"><label class="form-label">Ano</label><input type="number" name="ano" class="form-control"></div>
+        <div class="form-group"><label class="form-label">Tipo</label>
+          <select name="tipo" class="form-control"><option value="sedan">Sedan</option><option value="suv">SUV</option><option value="van">Van</option><option value="minivan">Minivan</option><option value="hatch">Hatch</option></select></div>
+        <div class="form-group"><label class="form-label">KM Atual</label><input type="number" name="km_atual" class="form-control" step="0.1"></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+        <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-novo').classList.remove('open')">Cancelar</button>
+        <button type="submit" class="btn btn-teal">Cadastrar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

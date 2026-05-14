@@ -1,103 +1,249 @@
 {% extends 'base.html' %}
-{% block title %}Dashboard — MEDTRANS 360{% endblock %}
-{% block page_title %}DASHBOARD{% endblock %}
+{% block title %}Painel — MEDTRANS 360{% endblock %}
+{% block page_title %}Painel · Visão geral das operações de transporte{% endblock %}
+
+{% block extra_css %}
+<style>
+.dash-grid{display:grid;grid-template-columns:1fr 340px;gap:16px}
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.acesso-rapido .ar-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;background:rgba(0,0,0,.15);border:1px solid var(--border);margin-bottom:8px;text-decoration:none;transition:all .15s}
+.acesso-rapido .ar-item:hover{border-color:var(--teal);background:rgba(0,191,165,.05)}
+.ar-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ar-label{font-size:.75rem;font-weight:600;color:var(--text)}
+.ar-sub{font-size:.62rem;color:var(--text3)}
+.ctrl-btns{display:flex;flex-wrap:wrap;gap:8px}
+.frota-item{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(36,53,80,.5)}
+.frota-item:last-child{border-bottom:none}
+.frota-label{font-size:.72rem;color:var(--text3)}
+.frota-value{font-size:.78rem;font-weight:700;color:var(--text)}
+@media(max-width:900px){.dash-grid{grid-template-columns:1fr}.charts-row{grid-template-columns:1fr}}
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="stats-grid">
-  <div class="stat-card">
+
+<!-- STATS PRINCIPAIS -->
+<div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
+  <div class="stat-card" style="--accent:var(--teal)">
     <div class="stat-label">Corridas Hoje</div>
-    <div class="stat-value" style="color:var(--cyan)">{{ stats.corridas_hoje }}</div>
-    <div style="font-size:.7rem;color:var(--text3);font-family:var(--mono)">agendadas</div>
-    <div class="stat-icon"><svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24" opacity=".5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+    <div class="stat-value" style="color:var(--teal)">{{ stats.corridas_hoje }}</div>
+    <div class="stat-sub">{{ stats.em_andamento }} em andamento</div>
+    <div class="stat-icon">🚑</div>
   </div>
-  <div class="stat-card">
-    <div class="stat-label">Em Andamento</div>
-    <div class="stat-value" style="color:var(--green)">{{ stats.em_andamento }}</div>
-    <div style="font-size:.7rem;color:var(--text3);font-family:var(--mono)">ativas agora</div>
+  <div class="stat-card" style="--accent:#1976d2">
+    <div class="stat-label">KM Hoje</div>
+    <div class="stat-value" style="color:var(--blue2)">{{ '%.0f'|format(stats.km_hoje) }}</div>
+    <div class="stat-sub">km rodados</div>
+    <div class="stat-icon">📍</div>
   </div>
-  <div class="stat-card">
-    <div class="stat-label">Motoristas</div>
-    <div class="stat-value" style="color:var(--blue)">{{ stats.motoristas_ativos }}</div>
-    <div style="font-size:.7rem;color:var(--text3);font-family:var(--mono)">disponíveis</div>
+  <div class="stat-card" style="--accent:var(--teal)">
+    <div class="stat-label">Motoristas Ativos</div>
+    <div class="stat-value" style="color:var(--teal)">{{ stats.motoristas }}<span style="font-size:1rem;color:var(--text3)">/{{ stats.veiculos }}</span></div>
+    <div class="stat-sub">veículos disponíveis</div>
+    <div class="stat-icon">👤</div>
   </div>
-  <div class="stat-card">
-    <div class="stat-label">Pacientes</div>
-    <div class="stat-value">{{ stats.pacientes }}</div>
-    <div style="font-size:.7rem;color:var(--text3);font-family:var(--mono)">cadastrados</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-label">Total Corridas</div>
-    <div class="stat-value">{{ stats.total_corridas }}</div>
-    <div style="font-size:.7rem;color:var(--text3);font-family:var(--mono)">no sistema</div>
-  </div>
-  <div class="stat-card" style="border-color:rgba(0,230,118,.2)">
-    <div class="stat-label">Receita Total</div>
-    <div class="stat-value" style="color:var(--green);font-size:1.4rem">R$ {{ "%.0f"|format(stats.receita_mes) }}</div>
-    <div style="font-size:.7rem;color:var(--text3);font-family:var(--mono)">concluídas</div>
+  <div class="stat-card" style="--accent:var(--orange)">
+    <div class="stat-label">Custo Combustível</div>
+    <div class="stat-value" style="color:var(--orange);font-size:1.3rem">R$ {{ '%.2f'|format(stats.custo_combustivel) }}</div>
+    <div class="stat-sub">Este mês</div>
+    <div class="stat-icon">⛽</div>
   </div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <span class="card-title" style="color:var(--cyan)">Corridas Recentes</span>
-    <a href="/corridas" class="btn btn-ghost btn-sm">Ver todas</a>
+<div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-top:0">
+  <div class="stat-card" style="--accent:var(--cyan)">
+    <div class="stat-label">Corridas no Mês</div>
+    <div class="stat-value" style="color:var(--cyan)">{{ stats.concluidas + stats.em_andamento + stats.agendadas }}</div>
+    <div class="stat-sub">total registradas</div>
   </div>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Paciente</th>
-          <th>Motorista</th>
-          <th>Origem → Destino</th>
-          <th>Serviço</th>
-          <th>Status</th>
-          <th>KM</th>
-          <th>Valor</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for c in corridas %}
-        <tr>
-          <td><span style="font-family:var(--mono);color:var(--blue)">{{ c.id }}</span></td>
-          <td><strong>{{ c.paciente_nome or '—' }}</strong></td>
-          <td>{{ c.motorista_nome or '—' }}</td>
-          <td style="max-width:200px">
-            <span style="color:var(--text3)">{{ (c.origem or '—')[:20] }}</span>
-            <span style="color:var(--blue)"> → </span>
-            <span>{{ (c.destino or '—')[:20] }}</span>
-          </td>
-          <td><span style="font-size:.7rem;color:var(--text3)">{{ c.tipo_servico or '—' }}</span></td>
-          <td><span class="status status-{{ c.status }}">{{ c.status.replace('_',' ') }}</span></td>
-          <td><span style="font-family:var(--mono);color:var(--text2)">{{ '%.1f'|format(c.km_total or 0) }} km</span></td>
-          <td><span style="color:var(--green);font-family:var(--mono)">R$ {{ '%.0f'|format(c.valor or 0) }}</span></td>
-        </tr>
-        {% else %}
-        <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--text3)">Nenhuma corrida ainda</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="stat-card" style="--accent:var(--cyan)">
+    <div class="stat-label">KM no Mês</div>
+    <div class="stat-value" style="color:var(--cyan)">{{ '%.0f'|format(stats.km_mes) }}</div>
+    <div class="stat-sub">km totais</div>
+  </div>
+  <div class="stat-card" style="--accent:var(--orange)">
+    <div class="stat-label">Pendentes</div>
+    <div class="stat-value" style="color:var(--orange)">{{ stats.pendentes }}</div>
+    <div class="stat-sub">agendadas</div>
+  </div>
+  <div class="stat-card" style="--accent:var(--green)">
+    <div class="stat-label">Concluídas</div>
+    <div class="stat-value" style="color:var(--green)">{{ stats.concluidas }}</div>
+    <div class="stat-sub">finalizadas</div>
   </div>
 </div>
 
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
-  <a href="/corridas" class="card" style="text-decoration:none;cursor:pointer;display:flex;align-items:center;gap:16px">
-    <div style="width:48px;height:48px;background:var(--blue-glow);border:1px solid var(--border2);border-radius:12px;display:flex;align-items:center;justify-content:center">
-      <svg width="22" height="22" fill="none" stroke="var(--blue)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+<!-- GRID PRINCIPAL -->
+<div class="dash-grid">
+  <div>
+    <!-- GRÁFICO CORRIDAS POR DIA -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <span class="card-title" style="color:var(--text)">Corridas por Dia (7 dias)</span>
+      </div>
+      <canvas id="chart-semana" height="90"></canvas>
     </div>
-    <div>
-      <div style="font-size:.85rem;font-weight:800;color:var(--text)">Nova Corrida</div>
-      <div style="font-size:.7rem;color:var(--text3)">Agendar transporte de paciente</div>
+
+    <!-- GRÁFICO PIZZA -->
+    <div class="charts-row">
+      <div class="card">
+        <div class="card-header"><span class="card-title" style="color:var(--text)">Corridas por</span></div>
+        <div style="display:flex;align-items:center;gap:16px">
+          <canvas id="chart-tipos" width="140" height="140" style="flex-shrink:0"></canvas>
+          <div id="legenda-tipos" style="font-size:.7rem;line-height:2"></div>
+        </div>
+      </div>
+      <!-- CONTROLE OPERACIONAL -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title" style="color:var(--text)">Controle</span>
+          <span id="sys-badge" class="status s-concluida">{{ sys_status|upper }}</span>
+        </div>
+        <div class="ctrl-btns">
+          <button class="btn btn-teal btn-sm" onclick="op('iniciar')">▶ Iniciar</button>
+          <button class="btn btn-ghost btn-sm" style="border-color:var(--orange);color:var(--orange)" onclick="op('pausar')">⏸ Pausar</button>
+          <button class="btn btn-ghost btn-sm" style="border-color:var(--cyan);color:var(--cyan)" onclick="op('reiniciar')">🔄 Reiniciar</button>
+          <button class="btn btn-ghost btn-sm" onclick="op('limpar_alertas')">🔔 Alertas</button>
+          <button class="btn btn-ghost btn-sm" onclick="op('limpar_logs')">🗑 Logs</button>
+          <button class="btn btn-danger btn-sm" onclick="op('finalizar')">⏹ Finalizar</button>
+          <a href="/relatorio/pdf" target="_blank" class="btn btn-green btn-sm">📄 PDF</a>
+        </div>
+      </div>
     </div>
-  </a>
-  <a href="/ia" class="card" style="text-decoration:none;cursor:pointer;display:flex;align-items:center;gap:16px;border-color:rgba(0,212,255,.2)">
-    <div style="width:48px;height:48px;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.3);border-radius:12px;display:flex;align-items:center;justify-content:center">
-      <svg width="22" height="22" fill="none" stroke="var(--cyan)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+
+    <!-- CORRIDAS RECENTES -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-header">
+        <span class="card-title" style="color:var(--text)">Corridas Recentes</span>
+        <a href="/corridas" class="btn btn-ghost btn-sm">Ver todas</a>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Paciente</th><th>Motorista</th><th>Destino</th><th>Tipo</th><th>Status</th></tr></thead>
+          <tbody>
+            {% for c in corridas %}
+            <tr>
+              <td style="color:var(--teal);font-weight:600">{{ c.id }}</td>
+              <td><strong>{{ c.paciente_nome or '—' }}</strong></td>
+              <td>{{ c.motorista_nome or '—' }}</td>
+              <td>{{ (c.destino or '—')[:24] }}</td>
+              <td style="font-size:.7rem;color:var(--text3)">{{ c.tipo_servico or '—' }}</td>
+              <td><span class="status s-{{ c.status }}">{{ c.status.replace('_',' ') }}</span></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Nenhuma corrida</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
-    <div>
-      <div style="font-size:.85rem;font-weight:800;color:var(--cyan)">IA MEDTRANS</div>
-      <div style="font-size:.7rem;color:var(--text3)">Assistente inteligente integrado</div>
+  </div>
+
+  <!-- COLUNA DIREITA -->
+  <div>
+    <!-- ACESSO RÁPIDO -->
+    <div class="card acesso-rapido" style="margin-bottom:16px">
+      <div class="card-header"><span class="card-title" style="color:var(--text)">Acesso Rápido</span></div>
+      <a href="/corridas" class="ar-item">
+        <div class="ar-icon" style="background:rgba(0,191,165,.15)"><svg width="16" height="16" fill="none" stroke="var(--teal)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+        <div><div class="ar-label">Categoria: Corridas</div><div class="ar-sub">{{ stats.em_andamento }} em andamento</div></div>
+      </a>
+      <a href="/motoristas" class="ar-item">
+        <div class="ar-icon" style="background:rgba(21,101,192,.15)"><svg width="16" height="16" fill="none" stroke="var(--blue2)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/></svg></div>
+        <div><div class="ar-label">Motoristas</div><div class="ar-sub">{{ stats.motoristas }} Ativos</div></div>
+      </a>
+      <a href="/pacientes" class="ar-item">
+        <div class="ar-icon" style="background:rgba(0,229,255,.12)"><svg width="16" height="16" fill="none" stroke="var(--cyan)" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+        <div><div class="ar-label">Pacientes</div><div class="ar-sub">{{ stats.pacientes }} cadastrados</div></div>
+      </a>
+      <a href="/ia" class="ar-item">
+        <div class="ar-icon" style="background:rgba(0,191,165,.12)"><svg width="16" height="16" fill="none" stroke="var(--teal)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg></div>
+        <div><div class="ar-label">Assistente IA</div><div class="ar-sub">Análise</div></div>
+      </a>
     </div>
-  </a>
+
+    <!-- RESUMO DA FROTA -->
+    <div class="card">
+      <div class="card-header"><span class="card-title" style="color:var(--text)">Categoria: Resumo da Frota</span></div>
+      <div class="frota-item"><span class="frota-label">→ Total de Veículos</span><span class="frota-value" style="color:var(--teal)">{{ stats.veiculos }}</span></div>
+      <div class="frota-item"><span class="frota-label">→ Total de Motoristas</span><span class="frota-value" style="color:var(--teal)">{{ stats.motoristas }}</span></div>
+      <div class="frota-item"><span class="frota-label">→ Total de Pacientes</span><span class="frota-value" style="color:var(--teal)">{{ stats.pacientes }}</span></div>
+      <div class="frota-item"><span class="frota-label">→ Total de Clínicas</span><span class="frota-value" style="color:var(--teal)">{{ stats.clinicas }}</span></div>
+      <div class="frota-item"><span class="frota-label">→ KM Total Rodado</span><span class="frota-value" style="color:var(--cyan)">{{ '%.0f'|format(stats.km_mes) }} km</span></div>
+      <div class="frota-item"><span class="frota-label">→ Receita Total</span><span class="frota-value" style="color:var(--green)">R$ {{ '%.0f'|format(stats.receita) }}</span></div>
+    </div>
+  </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+const semanaData = {{ corridas_semana|safe }};
+const tiposData  = {{ tipos_data|safe }};
+
+// Gráfico de barras — corridas por dia
+new Chart(document.getElementById('chart-semana'), {
+  type: 'bar',
+  data: {
+    labels: semanaData.map(d=>d.dia),
+    datasets:[{
+      label:'Corridas',
+      data: semanaData.map(d=>d.total),
+      backgroundColor:'rgba(0,201,167,.5)',
+      borderColor:'rgba(0,201,167,1)',
+      borderWidth:1,
+      borderRadius:4,
+    }]
+  },
+  options:{
+    responsive:true, plugins:{legend:{display:false}},
+    scales:{
+      y:{beginAtZero:true,ticks:{color:'#3d6080',stepSize:1},grid:{color:'rgba(20,45,75,.6)'}},
+      x:{ticks:{color:'#3d6080'},grid:{display:false}}
+    }
+  }
+});
+
+// Gráfico pizza — tipos de serviço
+const cores = ['#00c9a7','#2196f3','#ff9800','#00e5ff','#26c6da','#7c4dff','#f48fb1'];
+if(tiposData.length > 0){
+  new Chart(document.getElementById('chart-tipos'),{
+    type:'doughnut',
+    data:{
+      labels: tiposData.map(t=>t.tipo),
+      datasets:[{data:tiposData.map(t=>t.total),backgroundColor:cores,borderWidth:0}]
+    },
+    options:{responsive:false,plugins:{legend:{display:false}},cutout:'65%'}
+  });
+  document.getElementById('legenda-tipos').innerHTML = tiposData.map((t,i)=>
+    `<div style="display:flex;align-items:center;gap:6px">
+      <span style="width:8px;height:8px;border-radius:50%;background:${cores[i]};flex-shrink:0;display:inline-block"></span>
+      <span style="color:#90a4ae;text-transform:capitalize">${t.tipo} ${Math.round(t.total/(tiposData.reduce((a,b)=>a+b.total,0))*100)}%</span>
+    </div>`
+  ).join('');
+}
+
+// Controle operacional
+const statusMap = {ativo:{txt:'ATIVO',cls:'s-concluida'},pausado:{txt:'PAUSADO',cls:'s-agendada'},finalizado:{txt:'ENCERRADO',cls:'s-cancelada'}};
+async function op(acao){
+  const msgs={iniciar:'Iniciar operação?',pausar:'Pausar sistema?',reiniciar:'Reiniciar sistema?',
+               finalizar:'FINALIZAR operação?',limpar_alertas:'Limpar alertas?',limpar_logs:'Limpar logs?'};
+  if(!confirm(msgs[acao]||'Confirmar?')) return;
+  const r=await fetch(`/api/operacao/${acao}`,{method:'POST'});
+  const d=await r.json();
+  if(d.ok && d.estado){
+    const b=document.getElementById('sys-badge');
+    const info=statusMap[d.estado]||statusMap.ativo;
+    b.textContent=info.txt; b.className=`status ${info.cls}`;
+  }
+}
+
+// Verificar status
+fetch('/api/sistema/status').then(r=>r.json()).then(d=>{
+  const b=document.getElementById('sys-badge');
+  const info=statusMap[d.estado]||statusMap.ativo;
+  if(b){b.textContent=info.txt;b.className=`status ${info.cls}`}
+});
+</script>
 {% endblock %}

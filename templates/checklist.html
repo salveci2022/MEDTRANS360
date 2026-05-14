@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+{% block title %}Checklist — MEDTRANS 360{% endblock %}
+{% block page_title %}Lista de Verificação · Veículos{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+  <div style="font-size:.85rem;color:var(--text3)">{{ lista|length }} verificação(ões) registrada(s)</div>
+  <button class="btn btn-teal" onclick="document.getElementById('modal-novo').classList.add('open')">+ Nova Verificação</button>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Veículo</th><th>Motorista</th><th>Data</th><th>Pneus</th><th>Óleo</th><th>Freios</th><th>Luz</th><th>Docs</th><th>1°Soc</th><th>Extin</th></tr></thead>
+      <tbody>
+        {% for c in lista %}
+        <tr>
+          <td style="color:var(--teal);font-weight:600">{{ c.id }}</td>
+          <td><strong>{{ c.modelo or '—' }}</strong> <span style="font-size:.68rem;color:var(--teal)">{{ c.placa or '' }}</span></td>
+          <td>{{ c.motorista_nome or '—' }}</td>
+          <td style="font-family:monospace;font-size:.72rem">{{ c.data or '—' }}</td>
+          {% for campo in ['pneus','oleo','freios','luzes','documentos','kit_primeiros_socorros','extintor'] %}
+          <td style="text-align:center">
+            {% if c[campo] %}<span style="color:var(--green)">✓</span>{% else %}<span style="color:var(--red)">✗</span>{% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% else %}
+        <tr><td colspan="11" style="text-align:center;padding:24px;color:var(--text3)">Nenhuma verificação</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-novo" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title">Nova Lista de Verificação</div>
+    <form method="POST" action="/checklist/novo">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Veículo</label>
+          <select name="veiculo_id" class="form-control" required>
+            <option value="">Selecione...</option>
+            {% for v in veiculos %}<option value="{{ v.id }}">{{ v.modelo }} — {{ v.placa }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Motorista</label>
+          <select name="motorista_id" class="form-control">
+            <option value="">Selecione...</option>
+            {% for m in motoristas %}<option value="{{ m.id }}">{{ m.nome }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group form-full">
+          <label class="form-label">Data</label>
+          <input type="text" name="data" class="form-control" placeholder="DD/MM/AAAA">
+        </div>
+      </div>
+
+      <div style="margin:12px 0 6px;font-size:.72rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:600">Itens Verificados</div>
+      <div class="check-item"><input type="checkbox" name="pneus" id="pneus"><label for="pneus">🔧 Pneus (calibragem e estado)</label></div>
+      <div class="check-item"><input type="checkbox" name="oleo" id="oleo"><label for="oleo">🛢️ Óleo do motor</label></div>
+      <div class="check-item"><input type="checkbox" name="freios" id="freios"><label for="freios">🛑 Freios</label></div>
+      <div class="check-item"><input type="checkbox" name="agua" id="agua"><label for="agua">💧 Água do radiador</label></div>
+      <div class="check-item"><input type="checkbox" name="bateria" id="bateria"><label for="bateria">🔋 Bateria</label></div>
+      <div class="check-item"><input type="checkbox" name="luzes" id="luzes"><label for="luzes">💡 Luzes (faróis, setas, freio)</label></div>
+      <div class="check-item"><input type="checkbox" name="limpadores" id="limpadores"><label for="limpadores">🌧️ Limpadores de para-brisa</label></div>
+      <div class="check-item"><input type="checkbox" name="documentos" id="documentos"><label for="documentos">📄 Documentos do veículo</label></div>
+      <div class="check-item"><input type="checkbox" name="kit" id="kit"><label for="kit">🩺 Kit de primeiros socorros</label></div>
+      <div class="check-item"><input type="checkbox" name="extintor" id="extintor"><label for="extintor">🧯 Extintor de incêndio</label></div>
+
+      <div class="form-group" style="margin-top:12px">
+        <label class="form-label">Observações</label>
+        <textarea name="obs" class="form-control" rows="2"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+        <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-novo').classList.remove('open')">Cancelar</button>
+        <button type="submit" class="btn btn-teal">Registrar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

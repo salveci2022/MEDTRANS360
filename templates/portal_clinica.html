@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}Portal Clínica — MEDTRANS 360{% endblock %}
+{% block page_title %}Portal Clínica{% endblock %}
+{% block content %}
+<div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
+  <div><div style="font-size:1rem;font-weight:700">Olá, {{ usuario }}!</div><div style="font-size:.75rem;color:var(--text3)">Gerencie seus transportes</div></div>
+  <button class="btn btn-teal" onclick="document.getElementById('modal-nova').classList.add('open')">+ Solicitar Transporte</button>
+</div>
+<div class="card">
+  <div class="card-header"><span class="card-title" style="color:var(--text)">Transportes Solicitados</span></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>Paciente</th><th>Motorista</th><th>Destino</th><th>Tipo</th><th>Data</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for c in corridas %}
+        <tr>
+          <td style="color:var(--teal);font-weight:600">#{{ c.id }}</td>
+          <td><strong>{{ c.paciente_nome or '—' }}</strong></td>
+          <td>{{ c.motorista_nome or '—' }}</td>
+          <td>{{ (c.destino or '—')[:28] }}</td>
+          <td style="font-size:.7rem;color:var(--text3)">{{ c.tipo_servico or '—' }}</td>
+          <td style="font-family:monospace;font-size:.72rem">{{ c.data_agendada or '—' }}</td>
+          <td><span class="status s-{{ c.status }}">{{ c.status.replace('_',' ') }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Nenhuma solicitação</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<div class="modal-overlay" id="modal-nova" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal">
+    <div class="modal-title">Solicitar Transporte</div>
+    <form method="POST" action="/corridas/nova">
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">Paciente</label>
+          <select name="paciente_id" class="form-control" required>
+            <option value="">Selecione...</option>
+            {% for p in pacientes %}<option value="{{ p.id }}">{{ p.nome }}</option>{% endfor %}
+          </select></div>
+        <div class="form-group"><label class="form-label">Motorista</label>
+          <select name="motorista_id" class="form-control">
+            <option value="">Selecione...</option>
+            {% for m in motoristas %}<option value="{{ m.id }}">{{ m.nome }}</option>{% endfor %}
+          </select></div>
+        <div class="form-group"><label class="form-label">Origem</label><input type="text" name="origem" class="form-control"></div>
+        <div class="form-group"><label class="form-label">Destino</label><input type="text" name="destino" class="form-control"></div>
+        <div class="form-group"><label class="form-label">Tipo</label>
+          <select name="tipo_servico" class="form-control"><option value="consulta">Consulta</option><option value="hemodiálise">Hemodiálise</option><option value="exame">Exame</option><option value="urgência">Urgência</option><option value="fisioterapia">Fisioterapia</option></select></div>
+        <div class="form-group"><label class="form-label">Data</label><input type="text" name="data_agendada" class="form-control" placeholder="DD/MM/AAAA"></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+        <button type="button" class="btn btn-ghost" onclick="document.getElementById('modal-nova').classList.remove('open')">Cancelar</button>
+        <button type="submit" class="btn btn-teal">Solicitar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
