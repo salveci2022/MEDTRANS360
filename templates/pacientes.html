@@ -3,10 +3,10 @@
 {% block page_title %}PACIENTES{% endblock %}
 {% block content %}
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-  <div><div style="font-size:1.1rem;font-weight:800">Pacientes</div><div style="font-size:.75rem;color:var(--text3)">{{ pacientes|length }} cadastrado(s)</div></div>
+  <div><div style="font-size:1.1rem;font-weight:800">Pacientes</div><div style="font-size:.75rem;color:#8aa0b8">{{ pacientes|length }} cadastrado(s)</div></div>
   <button class="btn btn-primary" onclick="document.getElementById('modal-novo').classList.add('open')">+ Novo Paciente</button>
 </div>
-<div class="card">
+<div class="card" style="background:#fff">
   <div class="table-wrap">
     <table>
       <thead><tr><th>#</th><th>Nome</th><th>CPF</th><th>Telefone</th><th>Convênio</th><th>Endereço</th></tr></thead>
@@ -21,7 +21,7 @@
           <td>{{ (p.endereco or '—')[:40] }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--text3)">Nenhum paciente cadastrado</td></tr>
+        <tr><td colspan="6" style="text-align:center;padding:32px;color:#8aa0b8">Nenhum paciente cadastrado</td></tr>
         {% endfor %}
       </tbody>
     </table>

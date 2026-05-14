@@ -6,14 +6,14 @@
   <div style="font-size:1rem;font-weight:700">{{ clinicas|length }} clínica(s)</div>
   <button class="btn btn-teal" onclick="document.getElementById('modal-nova').classList.add('open')">+ Nova Clínica</button>
 </div>
-<div class="card">
+<div class="card" style="background:#fff">
   <div class="table-wrap">
     <table>
       <thead><tr><th>#</th><th>Nome</th><th>CNPJ</th><th>Telefone</th><th>Responsável</th><th>Endereço</th><th>Status</th></tr></thead>
       <tbody>
         {% for c in clinicas %}
         <tr>
-          <td style="color:var(--teal);font-weight:600">{{ c.id }}</td>
+          <td style="color:#00bcd4;font-weight:600">{{ c.id }}</td>
           <td><strong>{{ c.nome }}</strong></td>
           <td style="font-size:.72rem;font-family:monospace">{{ c.cnpj or '—' }}</td>
           <td>{{ c.telefone or '—' }}</td>
@@ -22,7 +22,7 @@
           <td><span class="status {{ 's-concluida' if c.ativo else 's-cancelada' }}">{{ 'Ativa' if c.ativo else 'Inativa' }}</span></td>
         </tr>
         {% else %}
-        <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Nenhuma clínica</td></tr>
+        <tr><td colspan="7" style="text-align:center;padding:24px;color:#8aa0b8">Nenhuma clínica</td></tr>
         {% endfor %}
       </tbody>
     </table>

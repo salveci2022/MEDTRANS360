@@ -2,11 +2,11 @@
 {% block title %}Registrar KM — MEDTRANS 360{% endblock %}
 {% block page_title %}REGISTRAR KM{% endblock %}
 {% block content %}
-<div class="card" style="max-width:600px;margin:0 auto">
+<div class="card" style="background:#fff" style="max-width:600px;margin:0 auto">
   <div class="card-header">
     <span class="card-title" style="color:var(--cyan)">Corrida #{{ corrida.id }} — {{ corrida.paciente_nome or '—' }}</span>
   </div>
-  <p style="font-size:.8rem;color:var(--text3);margin-bottom:20px">Registre o KM do odômetro em cada etapa da corrida.</p>
+  <p style="font-size:.8rem;color:#8aa0b8;margin-bottom:20px">Registre o KM do odômetro em cada etapa da corrida.</p>
   <form method="POST">
     <div style="display:flex;flex-direction:column;gap:16px">
       {% set etapas = [
@@ -24,7 +24,7 @@
         </div>
         <div style="flex:1">
           <div style="font-size:.8rem;font-weight:700;margin-bottom:2px">{{ titulo }}</div>
-          <div style="font-size:.65rem;color:var(--text3)">{{ desc }}</div>
+          <div style="font-size:.65rem;color:#8aa0b8">{{ desc }}</div>
         </div>
         <input type="number" name="{{ campo }}" class="form-control" style="width:120px"
                placeholder="KM" step="0.1" min="0"

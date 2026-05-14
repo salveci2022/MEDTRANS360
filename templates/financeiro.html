@@ -6,19 +6,19 @@
   <div class="stat-card" style="border-color:rgba(0,230,118,.2)">
     <div class="stat-label">Receita Total</div>
     <div class="stat-value" style="color:var(--green);font-size:1.6rem">R$ {{ '%.2f'|format(total) }}</div>
-    <div style="font-size:.7rem;color:var(--text3);font-family:var(--mono)">corridas concluídas</div>
+    <div style="font-size:.7rem;color:#8aa0b8;font-family:var(--mono)">corridas concluídas</div>
   </div>
   <div class="stat-card">
     <div class="stat-label">Corridas Pagas</div>
     <div class="stat-value" style="color:var(--cyan)">{{ corridas|length }}</div>
-    <div style="font-size:.7rem;color:var(--text3);font-family:var(--mono)">finalizadas</div>
+    <div style="font-size:.7rem;color:#8aa0b8;font-family:var(--mono)">finalizadas</div>
   </div>
   <div class="stat-card">
     <div class="stat-label">Ticket Médio</div>
     <div class="stat-value" style="color:var(--blue);font-size:1.4rem">R$ {{ '%.0f'|format((total / corridas|length) if corridas else 0) }}</div>
   </div>
 </div>
-<div class="card">
+<div class="card" style="background:#fff">
   <div class="card-header">
     <span class="card-title" style="color:var(--green)">Corridas Concluídas</span>
   </div>
@@ -37,7 +37,7 @@
           <td><strong style="color:var(--green);font-family:var(--mono)">R$ {{ '%.2f'|format(c.valor or 0) }}</strong></td>
         </tr>
         {% else %}
-        <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text3)">Nenhuma corrida concluída</td></tr>
+        <tr><td colspan="7" style="text-align:center;padding:32px;color:#8aa0b8">Nenhuma corrida concluída</td></tr>
         {% endfor %}
       </tbody>
     </table>

@@ -6,7 +6,7 @@
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
   <div>
     <div style="font-size:1.1rem;font-weight:800">Gestão de Corridas</div>
-    <div style="font-size:.75rem;color:var(--text3)">{{ corridas|length }} corrida(s) registrada(s)</div>
+    <div style="font-size:.75rem;color:#8aa0b8">{{ corridas|length }} corrida(s) registrada(s)</div>
   </div>
   <button class="btn btn-primary" onclick="document.getElementById('modal-nova').classList.add('open')">
     <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -14,7 +14,7 @@
   </button>
 </div>
 
-<div class="card">
+<div class="card" style="background:#fff">
   <div class="table-wrap">
     <table>
       <thead>
@@ -38,10 +38,10 @@
           <td><strong>{{ c.paciente_nome or '—' }}</strong></td>
           <td>{{ c.motorista_nome or '—' }}</td>
           <td>{{ (c.destino or '—')[:30] }}</td>
-          <td><span style="font-size:.7rem;color:var(--text3)">{{ c.tipo_servico or '—' }}</span></td>
+          <td><span style="font-size:.7rem;color:#8aa0b8">{{ c.tipo_servico or '—' }}</span></td>
           <td><span style="font-family:var(--mono);font-size:.75rem">{{ c.data_agendada or '—' }}</span></td>
           <td><span class="status status-{{ c.status }}">{{ c.status.replace('_',' ') }}</span></td>
-          <td><span style="font-family:var(--mono);color:var(--text2)">{{ '%.1f'|format(c.km_total or 0) }}km</span></td>
+          <td><span style="font-family:var(--mono);color:#4a6280">{{ '%.1f'|format(c.km_total or 0) }}km</span></td>
           <td><span style="color:var(--green);font-family:var(--mono)">R${{ '%.0f'|format(c.valor or 0) }}</span></td>
           <td>
             <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -61,7 +61,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text3)">
+        <tr><td colspan="10" style="text-align:center;padding:40px;color:#8aa0b8">
           Nenhuma corrida cadastrada
         </td></tr>
         {% endfor %}

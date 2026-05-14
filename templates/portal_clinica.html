@@ -3,27 +3,27 @@
 {% block page_title %}Portal Clínica{% endblock %}
 {% block content %}
 <div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
-  <div><div style="font-size:1rem;font-weight:700">Olá, {{ usuario }}!</div><div style="font-size:.75rem;color:var(--text3)">Gerencie seus transportes</div></div>
+  <div><div style="font-size:1rem;font-weight:700">Olá, {{ usuario }}!</div><div style="font-size:.75rem;color:#8aa0b8">Gerencie seus transportes</div></div>
   <button class="btn btn-teal" onclick="document.getElementById('modal-nova').classList.add('open')">+ Solicitar Transporte</button>
 </div>
-<div class="card">
-  <div class="card-header"><span class="card-title" style="color:var(--text)">Transportes Solicitados</span></div>
+<div class="card" style="background:#fff">
+  <div class="card-header"><span class="card-title" style="color:#1a2a3a">Transportes Solicitados</span></div>
   <div class="table-wrap">
     <table>
       <thead><tr><th>#</th><th>Paciente</th><th>Motorista</th><th>Destino</th><th>Tipo</th><th>Data</th><th>Status</th></tr></thead>
       <tbody>
         {% for c in corridas %}
         <tr>
-          <td style="color:var(--teal);font-weight:600">#{{ c.id }}</td>
+          <td style="color:#00bcd4;font-weight:600">#{{ c.id }}</td>
           <td><strong>{{ c.paciente_nome or '—' }}</strong></td>
           <td>{{ c.motorista_nome or '—' }}</td>
           <td>{{ (c.destino or '—')[:28] }}</td>
-          <td style="font-size:.7rem;color:var(--text3)">{{ c.tipo_servico or '—' }}</td>
+          <td style="font-size:.7rem;color:#8aa0b8">{{ c.tipo_servico or '—' }}</td>
           <td style="font-family:monospace;font-size:.72rem">{{ c.data_agendada or '—' }}</td>
           <td><span class="status s-{{ c.status }}">{{ c.status.replace('_',' ') }}</span></td>
         </tr>
         {% else %}
-        <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Nenhuma solicitação</td></tr>
+        <tr><td colspan="7" style="text-align:center;padding:24px;color:#8aa0b8">Nenhuma solicitação</td></tr>
         {% endfor %}
       </tbody>
     </table>

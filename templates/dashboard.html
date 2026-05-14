@@ -6,16 +6,16 @@
 <style>
 .dash-grid{display:grid;grid-template-columns:1fr 340px;gap:16px}
 .charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
-.acesso-rapido .ar-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;background:rgba(0,0,0,.15);border:1px solid var(--border);margin-bottom:8px;text-decoration:none;transition:all .15s}
+.acesso-rapido .ar-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;background:#f8fafc;border:1px solid #dde4ed;margin-bottom:8px;text-decoration:none;transition:all .15s}
 .acesso-rapido .ar-item:hover{border-color:var(--teal);background:rgba(0,191,165,.05)}
 .ar-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.ar-label{font-size:.75rem;font-weight:600;color:var(--text)}
-.ar-sub{font-size:.62rem;color:var(--text3)}
+.ar-label{font-size:.75rem;font-weight:600;color:#1a2a3a}
+.ar-sub{font-size:.62rem;color:#8aa0b8}
 .ctrl-btns{display:flex;flex-wrap:wrap;gap:8px}
 .frota-item{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(36,53,80,.5)}
-.frota-item:last-child{border-bottom:none}
-.frota-label{font-size:.72rem;color:var(--text3)}
-.frota-value{font-size:.78rem;font-weight:700;color:var(--text)}
+.frota-item{border-bottom:1px solid #eef2f7}.frota-item:last-child{border-bottom:none}
+.frota-label{font-size:.72rem;color:#8aa0b8}
+.frota-value{font-size:.78rem;font-weight:700;color:#1a2a3a}
 @media(max-width:900px){.dash-grid{grid-template-columns:1fr}.charts-row{grid-template-columns:1fr}}
 </style>
 {% endblock %}
@@ -26,19 +26,19 @@
 <div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
   <div class="stat-card" style="--accent:var(--teal)">
     <div class="stat-label">Corridas Hoje</div>
-    <div class="stat-value" style="color:#00bcd4">{{ stats.corridas_hoje }}</div>
+    <div class="stat-value" style="color:#00bcd4;font-size:2rem">{{ stats.corridas_hoje }}</div>
     <div class="stat-sub">{{ stats.em_andamento }} em andamento</div>
     <div class="stat-icon">🚑</div>
   </div>
   <div class="stat-card" style="--accent:#1976d2">
     <div class="stat-label">KM Hoje</div>
-    <div class="stat-value" style="color:var(--blue2)">{{ '%.0f'|format(stats.km_hoje) }}</div>
+    <div class="stat-value" style="color:#1e88e5;font-size:2rem">{{ '%.0f'|format(stats.km_hoje) }}</div>
     <div class="stat-sub">km rodados</div>
     <div class="stat-icon">📍</div>
   </div>
   <div class="stat-card" style="--accent:var(--teal)">
     <div class="stat-label">Motoristas Ativos</div>
-    <div class="stat-value" style="color:#00bcd4">{{ stats.motoristas }}<span style="font-size:1rem;color:var(--text3)">/{{ stats.veiculos }}</span></div>
+    <div class="stat-value" style="color:#00bcd4;font-size:2rem">{{ stats.motoristas }}<span style="font-size:1rem;color:var(--text3)">/{{ stats.veiculos }}</span></div>
     <div class="stat-sub">veículos disponíveis</div>
     <div class="stat-icon">👤</div>
   </div>
@@ -79,7 +79,7 @@
     <!-- GRÁFICO CORRIDAS POR DIA -->
     <div class="card" style="margin-bottom:16px">
       <div class="card-header">
-        <span class="card-title" style="color:var(--text)">Corridas por Dia (7 dias)</span>
+        <span class="card-title" style="color:#1a2a3a;font-weight:700">Corridas por Dia (7 dias)</span>
       </div>
       <canvas id="chart-semana" height="90"></canvas>
     </div>
@@ -87,7 +87,7 @@
     <!-- GRÁFICO PIZZA -->
     <div class="charts-row">
       <div class="card">
-        <div class="card-header"><span class="card-title" style="color:var(--text)">Corridas por</span></div>
+        <div class="card-header"><span class="card-title" style="color:#1a2a3a;font-weight:700">Corridas por</span></div>
         <div style="display:flex;align-items:center;gap:16px">
           <canvas id="chart-tipos" width="140" height="140" style="flex-shrink:0"></canvas>
           <div id="legenda-tipos" style="font-size:.7rem;line-height:2"></div>
@@ -96,7 +96,7 @@
       <!-- CONTROLE OPERACIONAL -->
       <div class="card">
         <div class="card-header">
-          <span class="card-title" style="color:var(--text)">Controle</span>
+          <span class="card-title" style="color:#1a2a3a;font-weight:700">Controle</span>
           <span id="sys-badge" class="status s-concluida">{{ sys_status|upper }}</span>
         </div>
         <div class="ctrl-btns">
@@ -114,8 +114,8 @@
     <!-- CORRIDAS RECENTES -->
     <div class="card" style="margin-top:16px">
       <div class="card-header">
-        <span class="card-title" style="color:var(--text)">Corridas Recentes</span>
-        <a href="/corridas" class="btn btn-ghost btn-sm">Ver todas</a>
+        <span class="card-title" style="color:#1a2a3a;font-weight:700">Corridas Recentes</span>
+        <a href="/corridas" class="btn btn-sm" style="background:#f0f9fa;color:#0097a7;border:1px solid #b2ebf2">Ver todas</a>
       </div>
       <div class="table-wrap">
         <table>
@@ -123,7 +123,7 @@
           <tbody>
             {% for c in corridas %}
             <tr>
-              <td style="color:var(--teal);font-weight:600">{{ c.id }}</td>
+              <td style="color:#00bcd4;font-weight:700">{{ c.id }}</td>
               <td><strong>{{ c.paciente_nome or '—' }}</strong></td>
               <td>{{ c.motorista_nome or '—' }}</td>
               <td>{{ (c.destino or '—')[:24] }}</td>
@@ -131,7 +131,7 @@
               <td><span class="status s-{{ c.status }}">{{ c.status.replace('_',' ') }}</span></td>
             </tr>
             {% else %}
-            <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3)">Nenhuma corrida</td></tr>
+            <tr><td colspan="6" style="text-align:center;padding:24px;color:#8aa0b8">Nenhuma corrida</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -143,10 +143,10 @@
   <div>
     <!-- ACESSO RÁPIDO -->
     <div class="card acesso-rapido" style="margin-bottom:16px">
-      <div class="card-header"><span class="card-title" style="color:var(--text)">Acesso Rápido</span></div>
+      <div class="card-header"><span class="card-title" style="color:#1a2a3a;font-weight:700">Acesso Rápido</span></div>
       <a href="/corridas" class="ar-item">
         <div class="ar-icon" style="background:rgba(0,191,165,.15)"><svg width="16" height="16" fill="none" stroke="var(--teal)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-        <div><div class="ar-label">Categoria: Corridas</div><div class="ar-sub">{{ stats.em_andamento }} em andamento</div></div>
+        <div><div class="ar-label" style="color:#e8f4ff">Categoria: Corridas</div><div class="ar-sub" style="color:#8aa0b8">{{ stats.em_andamento }} em andamento</div></div>
       </a>
       <a href="/motoristas" class="ar-item">
         <div class="ar-icon" style="background:rgba(21,101,192,.15)"><svg width="16" height="16" fill="none" stroke="var(--blue2)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/></svg></div>
@@ -164,9 +164,9 @@
 
     <!-- RESUMO DA FROTA -->
     <div class="card">
-      <div class="card-header"><span class="card-title" style="color:var(--text)">Categoria: Resumo da Frota</span></div>
+      <div class="card-header"><span class="card-title" style="color:#1a2a3a;font-weight:700">Categoria: Resumo da Frota</span></div>
       <div class="frota-item"><span class="frota-label">→ Total de Veículos</span><span class="frota-value" style="color:#00bcd4">{{ stats.veiculos }}</span></div>
-      <div class="frota-item"><span class="frota-label">→ Total de Motoristas</span><span class="frota-value" style="color:#00bcd4">{{ stats.motoristas }}</span></div>
+      <div class="frota-item"><span class="frota-label">→ Total de Motoristas</span><span class="frota-value" style="color:#00bcd4;font-size:2rem">{{ stats.motoristas }}</span></div>
       <div class="frota-item"><span class="frota-label">→ Total de Pacientes</span><span class="frota-value" style="color:#00bcd4">{{ stats.pacientes }}</span></div>
       <div class="frota-item"><span class="frota-label">→ Total de Clínicas</span><span class="frota-value" style="color:#00bcd4">{{ stats.clinicas }}</span></div>
       <div class="frota-item"><span class="frota-label">→ KM Total Rodado</span><span class="frota-value" style="color:#00bcd4">{{ '%.0f'|format(stats.km_mes) }} km</span></div>
@@ -199,8 +199,8 @@ new Chart(document.getElementById('chart-semana'), {
   options:{
     responsive:true, plugins:{legend:{display:false}},
     scales:{
-      y:{beginAtZero:true,ticks:{color:'#3d6080',stepSize:1},grid:{color:'rgba(20,45,75,.6)'}},
-      x:{ticks:{color:'#3d6080'},grid:{display:false}}
+      y:{beginAtZero:true,ticks:{color:'#8aa0b8',stepSize:1},grid:{color:'rgba(200,213,228,.5)'}},
+      x:{ticks:{color:'#8aa0b8'},grid:{display:false,color:'rgba(200,213,228,.3)'}}
     }
   }
 });

@@ -4,29 +4,29 @@
 {% block content %}
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
   <div>
-    <span style="font-size:.8rem;color:var(--text3)">Gasto total: </span>
+    <span style="font-size:.8rem;color:#8aa0b8">Gasto total: </span>
     <span style="font-size:1.1rem;font-weight:700;color:var(--orange)">R$ {{ '%.2f'|format(total_gasto) }}</span>
   </div>
   <button class="btn btn-teal" onclick="document.getElementById('modal-novo').classList.add('open')">+ Registrar Abastecimento</button>
 </div>
-<div class="card">
+<div class="card" style="background:#fff">
   <div class="table-wrap">
     <table>
       <thead><tr><th>#</th><th>Veículo</th><th>Motorista</th><th>Litros</th><th>R$/L</th><th>Total</th><th>Tipo</th><th>Data</th></tr></thead>
       <tbody>
         {% for a in lista %}
         <tr>
-          <td style="color:var(--teal);font-weight:600">{{ a.id }}</td>
-          <td><strong>{{ a.modelo or '—' }}</strong> <span style="font-size:.7rem;color:var(--teal)">{{ a.placa or '' }}</span></td>
+          <td style="color:#00bcd4;font-weight:600">{{ a.id }}</td>
+          <td><strong>{{ a.modelo or '—' }}</strong> <span style="font-size:.7rem;color:#00bcd4">{{ a.placa or '' }}</span></td>
           <td>{{ a.motorista_nome or '—' }}</td>
           <td style="font-family:monospace">{{ '%.1f'|format(a.litros or 0) }}L</td>
-          <td style="font-family:monospace;color:var(--text3)">R$ {{ '%.2f'|format(a.valor_litro or 0) }}</td>
+          <td style="font-family:monospace;color:#8aa0b8">R$ {{ '%.2f'|format(a.valor_litro or 0) }}</td>
           <td style="color:var(--orange);font-weight:700;font-family:monospace">R$ {{ '%.2f'|format(a.valor_total or 0) }}</td>
-          <td style="font-size:.7rem;color:var(--text3)">{{ a.tipo_combustivel or '—' }}</td>
+          <td style="font-size:.7rem;color:#8aa0b8">{{ a.tipo_combustivel or '—' }}</td>
           <td style="font-size:.72rem;font-family:monospace">{{ a.data or '—' }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Nenhum abastecimento</td></tr>
+        <tr><td colspan="8" style="text-align:center;padding:24px;color:#8aa0b8">Nenhum abastecimento</td></tr>
         {% endfor %}
       </tbody>
     </table>

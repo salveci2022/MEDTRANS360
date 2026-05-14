@@ -3,19 +3,19 @@
 {% block page_title %}Lista de Verificação · Veículos{% endblock %}
 {% block content %}
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-  <div style="font-size:.85rem;color:var(--text3)">{{ lista|length }} verificação(ões) registrada(s)</div>
+  <div style="font-size:.85rem;color:#8aa0b8">{{ lista|length }} verificação(ões) registrada(s)</div>
   <button class="btn btn-teal" onclick="document.getElementById('modal-novo').classList.add('open')">+ Nova Verificação</button>
 </div>
 
-<div class="card">
+<div class="card" style="background:#fff">
   <div class="table-wrap">
     <table>
       <thead><tr><th>#</th><th>Veículo</th><th>Motorista</th><th>Data</th><th>Pneus</th><th>Óleo</th><th>Freios</th><th>Luz</th><th>Docs</th><th>1°Soc</th><th>Extin</th></tr></thead>
       <tbody>
         {% for c in lista %}
         <tr>
-          <td style="color:var(--teal);font-weight:600">{{ c.id }}</td>
-          <td><strong>{{ c.modelo or '—' }}</strong> <span style="font-size:.68rem;color:var(--teal)">{{ c.placa or '' }}</span></td>
+          <td style="color:#00bcd4;font-weight:600">{{ c.id }}</td>
+          <td><strong>{{ c.modelo or '—' }}</strong> <span style="font-size:.68rem;color:#00bcd4">{{ c.placa or '' }}</span></td>
           <td>{{ c.motorista_nome or '—' }}</td>
           <td style="font-family:monospace;font-size:.72rem">{{ c.data or '—' }}</td>
           {% for campo in ['pneus','oleo','freios','luzes','documentos','kit_primeiros_socorros','extintor'] %}
@@ -25,7 +25,7 @@
           {% endfor %}
         </tr>
         {% else %}
-        <tr><td colspan="11" style="text-align:center;padding:24px;color:var(--text3)">Nenhuma verificação</td></tr>
+        <tr><td colspan="11" style="text-align:center;padding:24px;color:#8aa0b8">Nenhuma verificação</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -57,7 +57,7 @@
         </div>
       </div>
 
-      <div style="margin:12px 0 6px;font-size:.72rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:600">Itens Verificados</div>
+      <div style="margin:12px 0 6px;font-size:.72rem;color:#8aa0b8;text-transform:uppercase;letter-spacing:1px;font-weight:600">Itens Verificados</div>
       <div class="check-item"><input type="checkbox" name="pneus" id="pneus"><label for="pneus">🔧 Pneus (calibragem e estado)</label></div>
       <div class="check-item"><input type="checkbox" name="oleo" id="oleo"><label for="oleo">🛢️ Óleo do motor</label></div>
       <div class="check-item"><input type="checkbox" name="freios" id="freios"><label for="freios">🛑 Freios</label></div>
