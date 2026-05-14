@@ -26,7 +26,7 @@
 <div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
   <div class="stat-card" style="--accent:var(--teal)">
     <div class="stat-label">Corridas Hoje</div>
-    <div class="stat-value" style="color:var(--teal)">{{ stats.corridas_hoje }}</div>
+    <div class="stat-value" style="color:#00bcd4">{{ stats.corridas_hoje }}</div>
     <div class="stat-sub">{{ stats.em_andamento }} em andamento</div>
     <div class="stat-icon">🚑</div>
   </div>
@@ -38,7 +38,7 @@
   </div>
   <div class="stat-card" style="--accent:var(--teal)">
     <div class="stat-label">Motoristas Ativos</div>
-    <div class="stat-value" style="color:var(--teal)">{{ stats.motoristas }}<span style="font-size:1rem;color:var(--text3)">/{{ stats.veiculos }}</span></div>
+    <div class="stat-value" style="color:#00bcd4">{{ stats.motoristas }}<span style="font-size:1rem;color:var(--text3)">/{{ stats.veiculos }}</span></div>
     <div class="stat-sub">veículos disponíveis</div>
     <div class="stat-icon">👤</div>
   </div>
@@ -53,12 +53,12 @@
 <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-top:0">
   <div class="stat-card" style="--accent:var(--cyan)">
     <div class="stat-label">Corridas no Mês</div>
-    <div class="stat-value" style="color:var(--cyan)">{{ stats.concluidas + stats.em_andamento + stats.agendadas }}</div>
+    <div class="stat-value" style="color:#00bcd4">{{ stats.concluidas + stats.em_andamento + stats.agendadas }}</div>
     <div class="stat-sub">total registradas</div>
   </div>
   <div class="stat-card" style="--accent:var(--cyan)">
     <div class="stat-label">KM no Mês</div>
-    <div class="stat-value" style="color:var(--cyan)">{{ '%.0f'|format(stats.km_mes) }}</div>
+    <div class="stat-value" style="color:#00bcd4">{{ '%.0f'|format(stats.km_mes) }}</div>
     <div class="stat-sub">km totais</div>
   </div>
   <div class="stat-card" style="--accent:var(--orange)">
@@ -165,11 +165,11 @@
     <!-- RESUMO DA FROTA -->
     <div class="card">
       <div class="card-header"><span class="card-title" style="color:var(--text)">Categoria: Resumo da Frota</span></div>
-      <div class="frota-item"><span class="frota-label">→ Total de Veículos</span><span class="frota-value" style="color:var(--teal)">{{ stats.veiculos }}</span></div>
-      <div class="frota-item"><span class="frota-label">→ Total de Motoristas</span><span class="frota-value" style="color:var(--teal)">{{ stats.motoristas }}</span></div>
-      <div class="frota-item"><span class="frota-label">→ Total de Pacientes</span><span class="frota-value" style="color:var(--teal)">{{ stats.pacientes }}</span></div>
-      <div class="frota-item"><span class="frota-label">→ Total de Clínicas</span><span class="frota-value" style="color:var(--teal)">{{ stats.clinicas }}</span></div>
-      <div class="frota-item"><span class="frota-label">→ KM Total Rodado</span><span class="frota-value" style="color:var(--cyan)">{{ '%.0f'|format(stats.km_mes) }} km</span></div>
+      <div class="frota-item"><span class="frota-label">→ Total de Veículos</span><span class="frota-value" style="color:#00bcd4">{{ stats.veiculos }}</span></div>
+      <div class="frota-item"><span class="frota-label">→ Total de Motoristas</span><span class="frota-value" style="color:#00bcd4">{{ stats.motoristas }}</span></div>
+      <div class="frota-item"><span class="frota-label">→ Total de Pacientes</span><span class="frota-value" style="color:#00bcd4">{{ stats.pacientes }}</span></div>
+      <div class="frota-item"><span class="frota-label">→ Total de Clínicas</span><span class="frota-value" style="color:#00bcd4">{{ stats.clinicas }}</span></div>
+      <div class="frota-item"><span class="frota-label">→ KM Total Rodado</span><span class="frota-value" style="color:#00bcd4">{{ '%.0f'|format(stats.km_mes) }} km</span></div>
       <div class="frota-item"><span class="frota-label">→ Receita Total</span><span class="frota-value" style="color:var(--green)">R$ {{ '%.0f'|format(stats.receita) }}</span></div>
     </div>
   </div>
@@ -190,8 +190,8 @@ new Chart(document.getElementById('chart-semana'), {
     datasets:[{
       label:'Corridas',
       data: semanaData.map(d=>d.total),
-      backgroundColor:'rgba(0,201,167,.5)',
-      borderColor:'rgba(0,201,167,1)',
+      backgroundColor:'rgba(0,188,212,.55)',
+      borderColor:'rgba(0,188,212,1)',
       borderWidth:1,
       borderRadius:4,
     }]
@@ -206,7 +206,7 @@ new Chart(document.getElementById('chart-semana'), {
 });
 
 // Gráfico pizza — tipos de serviço
-const cores = ['#00c9a7','#2196f3','#ff9800','#00e5ff','#26c6da','#7c4dff','#f48fb1'];
+const cores = ['#00bcd4','#1e88e5','#ff9800','#26c6da','#00e676','#7c4dff','#ff8a65'];
 if(tiposData.length > 0){
   new Chart(document.getElementById('chart-tipos'),{
     type:'doughnut',
