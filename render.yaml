@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: medtrans360
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2
+    disk:
+      name: medtrans-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: MEDTRANS_DB_PATH
+        value: /data/medtrans.db
+      - key: FLASK_ENV
+        value: production

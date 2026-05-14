@@ -4,7 +4,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 TZ = ZoneInfo('America/Sao_Paulo')
-DB_PATH = os.environ.get('MEDTRANS_DB_PATH', 'data/medtrans.db')
+DB_PATH = os.environ.get('MEDTRANS_DB_PATH', '/data/medtrans.db' if os.path.exists('/data') else 'data/medtrans.db')
 
 def get_conn():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -22,17 +22,30 @@ def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = get_conn(); c = conn.cursor()
     c.executescript("""
-    CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, email TEXT UNIQUE NOT NULL, senha TEXT NOT NULL, perfil TEXT NOT NULL DEFAULT 'operador', ativo INTEGER DEFAULT 1, criado_em TEXT);
-    CREATE TABLE IF NOT EXISTS veiculos (id INTEGER PRIMARY KEY AUTOINCREMENT, modelo TEXT NOT NULL, placa TEXT UNIQUE, ano INTEGER, tipo TEXT DEFAULT 'sedan', km_atual REAL DEFAULT 0, status TEXT DEFAULT 'disponivel', criado_em TEXT);
-    CREATE TABLE IF NOT EXISTS motoristas (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, cnh TEXT, telefone TEXT, veiculo_id INTEGER, ativo INTEGER DEFAULT 1, criado_em TEXT);
-    CREATE TABLE IF NOT EXISTS pacientes (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, cpf TEXT, telefone TEXT, endereco TEXT, convenio TEXT, observacoes TEXT, prioridade TEXT DEFAULT 'normal', criado_em TEXT);
-    CREATE TABLE IF NOT EXISTS clinicas (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, cnpj TEXT, telefone TEXT, endereco TEXT, responsavel TEXT, email TEXT, ativo INTEGER DEFAULT 1, criado_em TEXT);
-    CREATE TABLE IF NOT EXISTS corridas (id INTEGER PRIMARY KEY AUTOINCREMENT, paciente_id INTEGER, motorista_id INTEGER, veiculo_id INTEGER, clinica_id INTEGER, origem TEXT, destino TEXT, status TEXT DEFAULT 'agendada', tipo_servico TEXT DEFAULT 'consulta', data_agendada TEXT, data_inicio TEXT, data_fim TEXT, km_saida_garagem REAL, km_chegada_paciente REAL, km_saida_paciente REAL, km_chegada_destino REAL, km_saida_destino REAL, km_retorno_garagem REAL, km_total REAL DEFAULT 0, valor REAL DEFAULT 0, observacoes TEXT, criado_em TEXT);
-    CREATE TABLE IF NOT EXISTS combustivel (id INTEGER PRIMARY KEY AUTOINCREMENT, veiculo_id INTEGER, motorista_id INTEGER, litros REAL, valor_litro REAL, valor_total REAL, km_atual REAL, tipo_combustivel TEXT DEFAULT 'gasolina', posto TEXT, data TEXT, criado_em TEXT);
-    CREATE TABLE IF NOT EXISTS checklist (id INTEGER PRIMARY KEY AUTOINCREMENT, veiculo_id INTEGER, motorista_id INTEGER, data TEXT, pneus INTEGER DEFAULT 0, oleo INTEGER DEFAULT 0, freios INTEGER DEFAULT 0, agua INTEGER DEFAULT 0, bateria INTEGER DEFAULT 0, luzes INTEGER DEFAULT 0, limpadores INTEGER DEFAULT 0, documentos INTEGER DEFAULT 0, kit_primeiros_socorros INTEGER DEFAULT 0, extintor INTEGER DEFAULT 0, obs TEXT, criado_em TEXT);
-    CREATE TABLE IF NOT EXISTS chat_ia (id INTEGER PRIMARY KEY AUTOINCREMENT, usuario_id INTEGER, role TEXT, conteudo TEXT, criado_em TEXT);
-    CREATE TABLE IF NOT EXISTS audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, usuario TEXT, acao TEXT, detalhes TEXT, ip TEXT, criado_em TEXT);
+    CREATE TABLE IF NOT EXISTS empresas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        cnpj TEXT,
+        email TEXT,
+        telefone TEXT,
+        plano TEXT DEFAULT 'basico',
+        ativo INTEGER DEFAULT 1,
+        vencimento TEXT,
+        criado_em TEXT
+    );
+    CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY AUTOINCREMENT, empresa_id INTEGER DEFAULT 1, nome TEXT NOT NULL, email TEXT UNIQUE NOT NULL, senha TEXT NOT NULL, perfil TEXT NOT NULL DEFAULT 'operador', ativo INTEGER DEFAULT 1, criado_em TEXT);
+    CREATE TABLE IF NOT EXISTS veiculos (id INTEGER PRIMARY KEY AUTOINCREMENT, empresa_id INTEGER DEFAULT 1, modelo TEXT NOT NULL, placa TEXT, ano INTEGER, tipo TEXT DEFAULT 'sedan', km_atual REAL DEFAULT 0, status TEXT DEFAULT 'disponivel', criado_em TEXT);
+    CREATE TABLE IF NOT EXISTS motoristas (id INTEGER PRIMARY KEY AUTOINCREMENT, empresa_id INTEGER DEFAULT 1, nome TEXT NOT NULL, cnh TEXT, telefone TEXT, veiculo_id INTEGER, ativo INTEGER DEFAULT 1, criado_em TEXT);
+    CREATE TABLE IF NOT EXISTS pacientes (id INTEGER PRIMARY KEY AUTOINCREMENT, empresa_id INTEGER DEFAULT 1, nome TEXT NOT NULL, cpf TEXT, telefone TEXT, endereco TEXT, convenio TEXT, observacoes TEXT, prioridade TEXT DEFAULT 'normal', criado_em TEXT);
+    CREATE TABLE IF NOT EXISTS clinicas (id INTEGER PRIMARY KEY AUTOINCREMENT, empresa_id INTEGER DEFAULT 1, nome TEXT NOT NULL, cnpj TEXT, telefone TEXT, endereco TEXT, responsavel TEXT, email TEXT, ativo INTEGER DEFAULT 1, criado_em TEXT);
+    CREATE TABLE IF NOT EXISTS corridas (id INTEGER PRIMARY KEY AUTOINCREMENT, empresa_id INTEGER DEFAULT 1, paciente_id INTEGER, motorista_id INTEGER, veiculo_id INTEGER, clinica_id INTEGER, origem TEXT, destino TEXT, status TEXT DEFAULT 'agendada', tipo_servico TEXT DEFAULT 'consulta', data_agendada TEXT, data_inicio TEXT, data_fim TEXT, km_saida_garagem REAL, km_chegada_paciente REAL, km_saida_paciente REAL, km_chegada_destino REAL, km_saida_destino REAL, km_retorno_garagem REAL, km_total REAL DEFAULT 0, valor REAL DEFAULT 0, observacoes TEXT, criado_em TEXT);
+    CREATE TABLE IF NOT EXISTS combustivel (id INTEGER PRIMARY KEY AUTOINCREMENT, empresa_id INTEGER DEFAULT 1, veiculo_id INTEGER, motorista_id INTEGER, litros REAL, valor_litro REAL, valor_total REAL, km_atual REAL, tipo_combustivel TEXT DEFAULT 'gasolina', posto TEXT, data TEXT, criado_em TEXT);
+    CREATE TABLE IF NOT EXISTS checklist (id INTEGER PRIMARY KEY AUTOINCREMENT, empresa_id INTEGER DEFAULT 1, veiculo_id INTEGER, motorista_id INTEGER, data TEXT, pneus INTEGER DEFAULT 0, oleo INTEGER DEFAULT 0, freios INTEGER DEFAULT 0, agua INTEGER DEFAULT 0, bateria INTEGER DEFAULT 0, luzes INTEGER DEFAULT 0, limpadores INTEGER DEFAULT 0, documentos INTEGER DEFAULT 0, kit_primeiros_socorros INTEGER DEFAULT 0, extintor INTEGER DEFAULT 0, obs TEXT, criado_em TEXT);
+    CREATE TABLE IF NOT EXISTS chat_ia (id INTEGER PRIMARY KEY AUTOINCREMENT, empresa_id INTEGER DEFAULT 1, usuario_id INTEGER, role TEXT, conteudo TEXT, criado_em TEXT);
+    CREATE TABLE IF NOT EXISTS audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, empresa_id INTEGER DEFAULT 1, usuario TEXT, acao TEXT, detalhes TEXT, ip TEXT, criado_em TEXT);
     """)
+    # Empresa demo
+    c.execute("INSERT OR IGNORE INTO empresas(id,nome,cnpj,email,plano,ativo,criado_em) VALUES(1,'MEDTRANS DEMO','00.000.000/0001-00','medtranscontrole@gmail.com','pro',1,?)",(now_str(),))
     # Usuários
     for nome,email,senha,perfil in [('Administrador','admin@medtrans360.com.br',hash_senha('Admin@2025!'),'master'),('Operador','operador@medtrans360.com.br',hash_senha('Oper@2025!'),'operador'),('Clínica','clinica@medtrans360.com.br',hash_senha('Clinica@2025!'),'clinica'),('Motorista','motorista@medtrans360.com.br',hash_senha('Motor@2025!'),'motorista')]:
         c.execute("INSERT OR IGNORE INTO usuarios(nome,email,senha,perfil,criado_em) VALUES(?,?,?,?,?)",(nome,email,senha,perfil,now_str()))

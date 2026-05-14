@@ -141,7 +141,8 @@ def login():
             conn.close()
             if u:
                 session.permanent = True
-                session.update({'user_id':u['id'],'nome':u['nome'],'email':u['email'],'perfil':u['perfil']})
+                session.update({'user_id':u['id'],'nome':u['nome'],'email':u['email'],
+                                'perfil':u['perfil'],'empresa_id':u['empresa_id'] or 1})
                 audit(u['email'],'login','',ip)
                 if u['perfil'] == 'motorista': return redirect(url_for('painel_motorista'))
                 if u['perfil'] == 'clinica':   return redirect(url_for('portal_clinica'))
@@ -161,21 +162,22 @@ def logout():
 def dashboard():
     conn = get_conn()
     hoje = hoje_str()
-    # Stats principais
+    eid = session.get('empresa_id', 1)
+    # Stats principais (filtradas por empresa)
     stats = {
-        'corridas_hoje':  conn.execute("SELECT COUNT(*) FROM corridas WHERE data_agendada=?",(hoje,)).fetchone()[0],
-        'em_andamento':   conn.execute("SELECT COUNT(*) FROM corridas WHERE status='em_andamento'").fetchone()[0],
-        'agendadas':      conn.execute("SELECT COUNT(*) FROM corridas WHERE status='agendada'").fetchone()[0],
-        'concluidas':     conn.execute("SELECT COUNT(*) FROM corridas WHERE status='concluida'").fetchone()[0],
-        'motoristas':     conn.execute("SELECT COUNT(*) FROM motoristas WHERE ativo=1").fetchone()[0],
-        'veiculos':       conn.execute("SELECT COUNT(*) FROM veiculos").fetchone()[0],
-        'pacientes':      conn.execute("SELECT COUNT(*) FROM pacientes").fetchone()[0],
-        'clinicas':       conn.execute("SELECT COUNT(*) FROM clinicas WHERE ativo=1").fetchone()[0],
-        'receita':        conn.execute("SELECT COALESCE(SUM(valor),0) FROM corridas WHERE status='concluida'").fetchone()[0],
-        'km_hoje':        conn.execute("SELECT COALESCE(SUM(km_total),0) FROM corridas WHERE data_agendada=? AND status='concluida'",(hoje,)).fetchone()[0],
-        'km_mes':         conn.execute("SELECT COALESCE(SUM(km_total),0) FROM corridas WHERE status='concluida'").fetchone()[0],
-        'custo_combustivel': conn.execute("SELECT COALESCE(SUM(valor_total),0) FROM combustivel").fetchone()[0],
-        'pendentes':      conn.execute("SELECT COUNT(*) FROM corridas WHERE status='agendada'").fetchone()[0],
+        'corridas_hoje':  conn.execute("SELECT COUNT(*) FROM corridas WHERE data_agendada=? AND empresa_id=?",(hoje,eid)).fetchone()[0],
+        'em_andamento':   conn.execute("SELECT COUNT(*) FROM corridas WHERE status='em_andamento' AND empresa_id=?",(eid,)).fetchone()[0],
+        'agendadas':      conn.execute("SELECT COUNT(*) FROM corridas WHERE status='agendada' AND empresa_id=?",(eid,)).fetchone()[0],
+        'concluidas':     conn.execute("SELECT COUNT(*) FROM corridas WHERE status='concluida' AND empresa_id=?",(eid,)).fetchone()[0],
+        'motoristas':     conn.execute("SELECT COUNT(*) FROM motoristas WHERE ativo=1 AND empresa_id=?",(eid,)).fetchone()[0],
+        'veiculos':       conn.execute("SELECT COUNT(*) FROM veiculos WHERE empresa_id=?",(eid,)).fetchone()[0],
+        'pacientes':      conn.execute("SELECT COUNT(*) FROM pacientes WHERE empresa_id=?",(eid,)).fetchone()[0],
+        'clinicas':       conn.execute("SELECT COUNT(*) FROM clinicas WHERE ativo=1 AND empresa_id=?",(eid,)).fetchone()[0],
+        'receita':        conn.execute("SELECT COALESCE(SUM(valor),0) FROM corridas WHERE status='concluida' AND empresa_id=?",(eid,)).fetchone()[0],
+        'km_hoje':        conn.execute("SELECT COALESCE(SUM(km_total),0) FROM corridas WHERE data_agendada=? AND status='concluida' AND empresa_id=?",(hoje,eid)).fetchone()[0],
+        'km_mes':         conn.execute("SELECT COALESCE(SUM(km_total),0) FROM corridas WHERE status='concluida' AND empresa_id=?",(eid,)).fetchone()[0],
+        'custo_combustivel': conn.execute("SELECT COALESCE(SUM(valor_total),0) FROM combustivel WHERE empresa_id=?",(eid,)).fetchone()[0],
+        'pendentes':      conn.execute("SELECT COUNT(*) FROM corridas WHERE status='agendada' AND empresa_id=?",(eid,)).fetchone()[0],
     }
     # Corridas por dia (7 dias)
     corridas_semana = []
@@ -231,10 +233,11 @@ def corridas():
 def nova_corrida():
     d = request.form
     conn = get_conn()
-    conn.execute("""INSERT INTO corridas(paciente_id,motorista_id,veiculo_id,clinica_id,
+    eid = session.get('empresa_id',1)
+    conn.execute("""INSERT INTO corridas(empresa_id,paciente_id,motorista_id,veiculo_id,clinica_id,
                     origem,destino,tipo_servico,data_agendada,valor,observacoes,status,criado_em)
-                    VALUES(?,?,?,?,?,?,?,?,?,'agendada',?,?)""",
-                 (d.get('paciente_id'),d.get('motorista_id'),d.get('veiculo_id'),d.get('clinica_id'),
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,'agendada',?)""",
+                 (eid,d.get('paciente_id'),d.get('motorista_id'),d.get('veiculo_id'),d.get('clinica_id'),
                   d.get('origem'),d.get('destino'),d.get('tipo_servico'),d.get('data_agendada'),
                   d.get('valor') or 0,d.get('observacoes'),now_str()))
     conn.commit(); conn.close()
@@ -604,6 +607,10 @@ def relatorio_pdf():
     buf.seek(0)
     return send_file(buf, mimetype='application/pdf', as_attachment=True,
                      download_name=f'MEDTRANS360-{datetime.now(TZ).strftime("%Y%m%d-%H%M")}.pdf')
+
+@app.route('/vendas')
+def vendas():
+    return render_template('vendas.html')
 
 @app.route('/acesso-negado')
 def acesso_negado():
