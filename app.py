@@ -3,17 +3,119 @@ MEDTRANS 360 — Plataforma Premium de Transporte de Pacientes
 Versão 2.0 PRO | SpyNet Tecnologia Forense & Soluções Digitais Ltda
 CNPJ: 64.000.808/0001-51
 """
-import os, json, hashlib, secrets, logging
+import os, json, hashlib, secrets, logging, smtplib, threading
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from flask import (Flask, render_template, request, jsonify,
                    redirect, url_for, session, make_response)
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from functools import wraps
 from collections import defaultdict
-import time
+import time, urllib.request, urllib.parse
 import anthropic
 
 from database import init_db, get_conn, audit, now_str, hash_senha
+
+# ── Configurações de notificação ─────────────────────────
+EMPRESA_WHATSAPP = os.environ.get('EMPRESA_WHATSAPP', '5561993962090')
+EMPRESA_EMAIL    = os.environ.get('EMPRESA_EMAIL', 'medtranscontrole@gmail.com')
+GMAIL_USER       = os.environ.get('GMAIL_USER', '')
+GMAIL_PASS       = os.environ.get('GMAIL_PASS', '')
+ZAPI_INSTANCE    = os.environ.get('ZAPI_INSTANCE', '3F075EE1B3845258CE3BBE013F70DD68')
+ZAPI_TOKEN       = os.environ.get('ZAPI_TOKEN', '')
+ZAPI_CLIENT_TOKEN= os.environ.get('ZAPI_CLIENT_TOKEN', '')
+
+
+# ─────────────────────────────────────────────────────────
+#  NOTIFICAÇÕES — WhatsApp + E-mail
+# ─────────────────────────────────────────────────────────
+
+def enviar_whatsapp(numero, mensagem):
+    """Envia WhatsApp via Z-API em thread separada"""
+    def _send():
+        try:
+            if not ZAPI_TOKEN or not ZAPI_INSTANCE:
+                log.warning("Z-API não configurada — WhatsApp não enviado")
+                return
+            url = f"https://api.z-api.io/instances/{ZAPI_INSTANCE}/token/{ZAPI_TOKEN}/send-text"
+            payload = json.dumps({"phone": numero, "message": mensagem}).encode()
+            req = urllib.request.Request(url, data=payload,
+                headers={"Content-Type": "application/json",
+                         "Client-Token": ZAPI_CLIENT_TOKEN})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                log.info(f"WhatsApp enviado para {numero}: {r.status}")
+        except Exception as e:
+            log.error(f"Erro WhatsApp: {e}")
+    threading.Thread(target=_send, daemon=True).start()
+
+
+def enviar_email(destinatario, assunto, corpo_html):
+    """Envia e-mail via Gmail SMTP em thread separada"""
+    def _send():
+        try:
+            if not GMAIL_USER or not GMAIL_PASS:
+                log.warning("Gmail não configurado — e-mail não enviado")
+                return
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = assunto
+            msg["From"]    = f"MEDTRANS 360 <{GMAIL_USER}>"
+            msg["To"]      = destinatario
+            msg.attach(MIMEText(corpo_html, "html", "utf-8"))
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as srv:
+                srv.login(GMAIL_USER, GMAIL_PASS)
+                srv.sendmail(GMAIL_USER, destinatario, msg.as_string())
+            log.info(f"E-mail enviado para {destinatario}")
+        except Exception as e:
+            log.error(f"Erro e-mail: {e}")
+    threading.Thread(target=_send, daemon=True).start()
+
+
+def notificar_rota_finalizada(corrida_id, motorista, paciente, destino, km_total=0, valor=0):
+    """Dispara WhatsApp + E-mail quando motorista finaliza rota"""
+    agora = datetime.now(TZ).strftime("%d/%m/%Y às %H:%M")
+
+    # ── WhatsApp ──────────────────────────────────────────
+    msg_wpp = (
+        f"🚑 *MEDTRANS 360 — ROTA FINALIZADA*\n\n"
+        f"✅ Corrida #{corrida_id} concluída!\n"
+        f"👤 Motorista: {motorista}\n"
+        f"🏥 Paciente: {paciente}\n"
+        f"📍 Destino: {destino}\n"
+        f"📏 KM Total: {km_total:.1f} km\n"
+        f"💰 Valor: R$ {valor:.2f}\n"
+        f"🕐 {agora}"
+    )
+    enviar_whatsapp(EMPRESA_WHATSAPP, msg_wpp)
+
+    # ── E-mail ────────────────────────────────────────────
+    corpo = f"""
+    <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;background:#04080f;color:#e8f0fe;padding:24px;border-radius:12px">
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:1.4rem;font-weight:900;color:#00d4ff;letter-spacing:2px">MEDTRANS 360</div>
+        <div style="font-size:.8rem;color:#4a6080">Sistema de Transporte Médico</div>
+      </div>
+      <div style="background:#0d1a2e;border:1px solid #1a3050;border-radius:10px;padding:20px;margin-bottom:16px">
+        <div style="font-size:1.1rem;font-weight:700;color:#00e676;margin-bottom:16px">✅ Rota #{corrida_id} Finalizada</div>
+        <table style="width:100%;font-size:.85rem;border-collapse:collapse">
+          <tr><td style="padding:6px 0;color:#8ba3c7">Motorista</td><td style="color:#e8f0fe;font-weight:700">{motorista}</td></tr>
+          <tr><td style="padding:6px 0;color:#8ba3c7">Paciente</td><td style="color:#e8f0fe">{paciente}</td></tr>
+          <tr><td style="padding:6px 0;color:#8ba3c7">Destino</td><td style="color:#e8f0fe">{destino}</td></tr>
+          <tr><td style="padding:6px 0;color:#8ba3c7">KM Total</td><td style="color:#00d4ff;font-weight:700">{km_total:.1f} km</td></tr>
+          <tr><td style="padding:6px 0;color:#8ba3c7">Valor</td><td style="color:#00e676;font-weight:700">R$ {valor:.2f}</td></tr>
+          <tr><td style="padding:6px 0;color:#8ba3c7">Data/Hora</td><td style="color:#e8f0fe">{agora}</td></tr>
+        </table>
+      </div>
+      <div style="text-align:center;font-size:.7rem;color:#4a6080">
+        SPYNET Tecnologia Forense · CNPJ 64.000.808/0001-51
+      </div>
+    </div>
+    """
+    enviar_email(
+        EMPRESA_EMAIL,
+        f"[MEDTRANS 360] ✅ Rota #{corrida_id} finalizada — {motorista}",
+        corpo
+    )
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
@@ -223,9 +325,17 @@ def atualizar_status(cid):
             WHERE c.id=?
         """, (cid,)).fetchone()
         if corrida_info:
+            mot  = corrida_info['motorista_nome'] or '?'
+            pac  = corrida_info['paciente_nome']  or '?'
+            dest = corrida_info['destino']         or '?'
+            km   = corrida_info['km_total']        or 0
+            val  = corrida_info['valor']           or 0
+            # Sino no sistema
             registrar_alerta('concluida',
-                f"✅ Rota #{cid} FINALIZADA — Motorista: {corrida_info['motorista_nome'] or '?'} | Paciente: {corrida_info['paciente_nome'] or '?'} | Destino: {corrida_info['destino'] or '?'}",
+                f"✅ Rota #{cid} FINALIZADA — Motorista: {mot} | Paciente: {pac} | Destino: {dest}",
                 corrida_id=cid)
+            # WhatsApp + E-mail para a empresa
+            notificar_rota_finalizada(cid, mot, pac, dest, km, val)
     set_clause = ', '.join(f"{k}=?" for k in updates)
     conn.execute(f"UPDATE corridas SET {set_clause} WHERE id=?",
                  (*updates.values(), cid))
