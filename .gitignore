@@ -1,4 +1,5 @@
 .env
+<<<<<<< HEAD
 venv/
 __pycache__/
 *.pyc
@@ -6,3 +7,16 @@ data/
 *.db
 logs/
 .DS_Store
+=======
+.env.local
+.env.production
+node_modules/
+.next/
+out/
+dist/
+*.log
+.DS_Store
+prisma/dev.db
+prisma/dev.db-journal
+check-db.mjs
+>>>>>>> bfab080ae7030946297b40c9b9571d7c1a1b0732

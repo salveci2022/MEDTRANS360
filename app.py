@@ -214,6 +214,18 @@ def atualizar_status(cid):
         updates['data_inicio'] = now_str()
     elif novo_status == 'concluida':
         updates['data_fim'] = now_str()
+        # Buscar dados da corrida para o alerta
+        corrida_info = conn.execute("""
+            SELECT c.*, p.nome as paciente_nome, m.nome as motorista_nome
+            FROM corridas c
+            LEFT JOIN pacientes p ON c.paciente_id=p.id
+            LEFT JOIN motoristas m ON c.motorista_id=m.id
+            WHERE c.id=?
+        """, (cid,)).fetchone()
+        if corrida_info:
+            registrar_alerta('concluida',
+                f"✅ Rota #{cid} FINALIZADA — Motorista: {corrida_info['motorista_nome'] or '?'} | Paciente: {corrida_info['paciente_nome'] or '?'} | Destino: {corrida_info['destino'] or '?'}",
+                corrida_id=cid)
     set_clause = ', '.join(f"{k}=?" for k in updates)
     conn.execute(f"UPDATE corridas SET {set_clause} WHERE id=?",
                  (*updates.values(), cid))
@@ -480,3 +492,54 @@ with app.app_context():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
+# ─────────────────────────────────────────────────────────
+#  LOGO BASE64
+# ─────────────────────────────────────────────────────────
+import base64 as _b64
+
+def get_logo_b64():
+    try:
+        logo_path = os.path.join(os.path.dirname(__file__), 'static', 'logo_b64.txt')
+        with open(logo_path, 'r') as f:
+            return f.read().strip()
+    except:
+        return ''
+
+@app.context_processor
+def inject_logo():
+    return {'LOGO_B64': get_logo_b64()}
+
+# ─────────────────────────────────────────────────────────
+#  NOTIFICAÇÃO — ROTA FINALIZADA
+# ─────────────────────────────────────────────────────────
+import threading
+
+_alertas = []  # fila de alertas em memória
+
+def registrar_alerta(tipo, msg, corrida_id=None):
+    from datetime import datetime
+    _alertas.append({
+        'tipo': tipo,
+        'msg': msg,
+        'corrida_id': corrida_id,
+        'ts': datetime.now(TZ).strftime('%H:%M:%S'),
+        'lido': False,
+    })
+    # Mantém só os últimos 50
+    if len(_alertas) > 50:
+        _alertas.pop(0)
+
+@app.route('/api/alertas')
+@login_required
+def api_alertas():
+    nao_lidos = [a for a in _alertas if not a['lido']]
+    return jsonify({'alertas': nao_lidos, 'total': len(nao_lidos)})
+
+@app.route('/api/alertas/limpar', methods=['POST'])
+@login_required
+def limpar_alertas():
+    for a in _alertas:
+        a['lido'] = True
+    return jsonify({'ok': True})
+
