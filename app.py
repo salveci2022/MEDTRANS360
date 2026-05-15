@@ -649,43 +649,24 @@ def webhook_hotmart():
         
         # Verificar se já existe
         conn = get_conn()
-        usuario_existente = None
-        if USE_PG:
-            import psycopg2.extras
-            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            cur.execute("SELECT * FROM usuarios WHERE email=%s", (email_cliente,))
-        else:
-            cur = conn.cursor()
-            cur.execute("SELECT * FROM usuarios WHERE email=?", (email_cliente,))
-        usuario_existente = cur.fetchone()
+        usuario_existente = conn.execute("SELECT * FROM usuarios WHERE email=?", (email_cliente,)).fetchone()
         
         if usuario_existente:
             conn.close()
             return jsonify({'ok': True, 'msg': 'cliente já cadastrado'})
         
         # Criar empresa
-        if USE_PG:
-            cur.execute("""INSERT INTO empresas(nome,email,plano,ativo,criado_em) 
-                          VALUES(%s,%s,%s,1,%s) RETURNING id""",
-                       (nome_cliente, email_cliente, plano, now_str()))
-            empresa_id = cur.fetchone()['id']
-        else:
-            cur.execute("""INSERT INTO empresas(nome,email,plano,ativo,criado_em) 
-                          VALUES(?,?,?,1,?)""",
-                       (nome_cliente, email_cliente, plano, now_str()))
-            empresa_id = cur.lastrowid
-        
-        # Gerar senha e criar usuário admin da empresa
         senha = gerar_senha()
-        if USE_PG:
-            cur.execute("""INSERT INTO usuarios(empresa_id,nome,email,senha,perfil,ativo,criado_em)
-                          VALUES(%s,%s,%s,%s,'master',1,%s)""",
-                       (empresa_id, nome_cliente, email_cliente, hash_senha(senha), now_str()))
-        else:
-            cur.execute("""INSERT INTO usuarios(empresa_id,nome,email,senha,perfil,ativo,criado_em)
+        conn.execute("INSERT OR IGNORE INTO empresas(nome,email,plano,ativo,criado_em) VALUES(?,?,?,1,?)",
+                     (nome_cliente, email_cliente, plano, now_str()))
+        conn.commit()
+        empresa = conn.execute("SELECT id FROM empresas WHERE email=?", (email_cliente,)).fetchone()
+        empresa_id = empresa['id'] if empresa else 1
+
+        # Criar usuário admin da empresa
+        conn.execute("""INSERT OR IGNORE INTO usuarios(empresa_id,nome,email,senha,perfil,ativo,criado_em)
                           VALUES(?,?,?,?,'master',1,?)""",
                        (empresa_id, nome_cliente, email_cliente, hash_senha(senha), now_str()))
-        
         conn.commit()
         conn.close()
         
