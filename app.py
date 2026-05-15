@@ -612,6 +612,92 @@ def relatorio_pdf():
     return send_file(buf, mimetype='application/pdf', as_attachment=True,
                      download_name=f'MEDTRANS360-{datetime.now(TZ).strftime("%Y%m%d-%H%M")}.pdf')
 
+
+# ── USUÁRIOS ──────────────────────────────────────────────
+@app.route('/usuarios')
+@perfil_required('master')
+def usuarios():
+    conn = get_conn()
+    lista = conn.execute("""SELECT u.*, e.nome as empresa_nome 
+                            FROM usuarios u LEFT JOIN empresas e ON u.empresa_id=e.id 
+                            ORDER BY u.id DESC""").fetchall()
+    logs = conn.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT 50").fetchall()
+    empresas = conn.execute("SELECT * FROM empresas ORDER BY nome").fetchall()
+    perfis_list = ['master','operador','motorista','clinica']
+    stats_perfis = []
+    for p in perfis_list:
+        total = conn.execute("SELECT COUNT(*) FROM usuarios WHERE perfil=?",(p,)).fetchone()[0]
+        ativos = conn.execute("SELECT COUNT(*) FROM usuarios WHERE perfil=? AND ativo=1",(p,)).fetchone()[0]
+        stats_perfis.append({'perfil':p,'total':total,'ativos':ativos})
+    conn.close()
+    return render_template('usuarios.html', usuarios=lista, logs=logs,
+                           empresas=empresas, stats_perfis=stats_perfis,
+                           usuario=session.get('nome'), perfil=session.get('perfil'))
+
+@app.route('/usuarios/novo', methods=['POST'])
+@perfil_required('master')
+def novo_usuario():
+    d = request.form
+    conn = get_conn()
+    try:
+        conn.execute("INSERT INTO usuarios(empresa_id,nome,email,senha,perfil,ativo,criado_em) VALUES(?,?,?,?,?,1,?)",
+                    (d.get('empresa_id',1), d.get('nome','').strip(), d.get('email','').strip().lower(),
+                     hash_senha(d.get('senha','')), d.get('perfil','operador'), now_str()))
+        conn.commit()
+        audit(session.get('email'), 'criar_usuario', f"Email: {d.get('email')}", get_ip())
+    except: pass
+    conn.close()
+    return redirect(url_for('usuarios'))
+
+@app.route('/usuarios/editar', methods=['POST'])
+@perfil_required('master')
+def editar_usuario():
+    d = request.form
+    uid, nome, email, perfil_u, senha = d.get('id'), d.get('nome','').strip(), d.get('email','').strip().lower(), d.get('perfil','operador'), d.get('senha','').strip()
+    conn = get_conn()
+    if senha:
+        conn.execute("UPDATE usuarios SET nome=?,email=?,perfil=?,senha=? WHERE id=?",(nome,email,perfil_u,hash_senha(senha),uid))
+    else:
+        conn.execute("UPDATE usuarios SET nome=?,email=?,perfil=? WHERE id=?",(nome,email,perfil_u,uid))
+    conn.commit(); conn.close()
+    audit(session.get('email'),'editar_usuario',f'ID:{uid}',get_ip())
+    return redirect(url_for('usuarios'))
+
+@app.route('/usuarios/toggle/<int:uid>', methods=['POST'])
+@perfil_required('master')
+def toggle_usuario(uid):
+    conn = get_conn()
+    u = conn.execute("SELECT ativo FROM usuarios WHERE id=?",(uid,)).fetchone()
+    if u:
+        novo = 0 if u['ativo'] else 1
+        conn.execute("UPDATE usuarios SET ativo=? WHERE id=?",(novo,uid))
+        conn.commit()
+    conn.close()
+    audit(session.get('email'),'toggle_usuario',f'ID:{uid}',get_ip())
+    return jsonify({'ok':True})
+
+@app.route('/usuarios/resetar-senha', methods=['POST'])
+@perfil_required('master')
+def resetar_senha_usuario():
+    d = request.get_json()
+    uid, senha = d.get('id'), d.get('senha','')
+    if not senha or len(senha) < 6: return jsonify({'ok':False,'erro':'Senha muito curta'})
+    conn = get_conn()
+    conn.execute("UPDATE usuarios SET senha=? WHERE id=?",(hash_senha(senha),uid))
+    conn.commit(); conn.close()
+    audit(session.get('email'),'resetar_senha',f'ID:{uid}',get_ip())
+    return jsonify({'ok':True})
+
+@app.route('/usuarios/excluir/<int:uid>', methods=['POST'])
+@perfil_required('master')
+def excluir_usuario(uid):
+    if uid == session.get('user_id'): return jsonify({'ok':False,'erro':'Não pode excluir sua própria conta'})
+    conn = get_conn()
+    conn.execute("DELETE FROM usuarios WHERE id=?",(uid,))
+    conn.commit(); conn.close()
+    audit(session.get('email'),'excluir_usuario',f'ID:{uid}',get_ip())
+    return jsonify({'ok':True})
+
 @app.route('/vendas')
 def vendas():
     return render_template('vendas.html')

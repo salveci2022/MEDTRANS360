@@ -226,6 +226,11 @@ tbody td strong{color:#1a2a3a}
       Clínicas
     </a>
 
+    <a href="/usuarios" class="nav-item {% if '/usuarios' in request.path %}active{% endif %}">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+      Usuários
+    </a>
+
     <div class="nav-section">Painéis</div>
     <a href="/painel/motorista" class="nav-item {% if '/painel/motorista' in request.path %}active{% endif %}">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
