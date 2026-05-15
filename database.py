@@ -1,4 +1,4 @@
-"""MEDTRANS 360 PRO — Database PostgreSQL + SQLite fallback"""
+"""MEDTRANS 360 PRO — Database PostgreSQL (psycopg3) + SQLite fallback"""
 import os, hashlib
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -12,8 +12,8 @@ def hoje_str(): return datetime.now(TZ).strftime('%d/%m/%Y')
 def hash_senha(s): return hashlib.sha256(s.encode()).hexdigest()
 
 def get_pg_conn():
-    """Conecta ao PostgreSQL usando parâmetros separados (evita problemas com @ na senha)."""
-    import psycopg2
+    """Conecta ao PostgreSQL usando psycopg3 com parâmetros separados."""
+    import psycopg
     from urllib.parse import urlparse
 
     parsed = urlparse(DATABASE_URL)
@@ -23,16 +23,17 @@ def get_pg_conn():
     porta   = parsed.port or 5432
     banco   = (parsed.path or '/postgres').lstrip('/') or 'postgres'
 
-    print(f"[DB] Conectando: host={host} port={porta} user={usuario} db={banco}")
+    print(f"[DB] Conectando psycopg3: host={host} port={porta} user={usuario} db={banco}")
 
-    conn = psycopg2.connect(
+    conn = psycopg.connect(
         host=host,
         port=porta,
         dbname=banco,
         user=usuario,
         password=senha,
         sslmode='require',
-        connect_timeout=10
+        connect_timeout=10,
+        row_factory=psycopg.rows.dict_row
     )
     return conn
 
@@ -59,43 +60,37 @@ def adapt_sql(sql):
 def q(sql, params=None, fetchall=False, fetchone=False, scalar=False):
     conn = get_conn()
     try:
-        if USE_PG:
-            import psycopg2.extras
-            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        else:
-            cur = conn.cursor()
+        cur = conn.cursor()
         sql2 = adapt_sql(sql)
         cur.execute(sql2, params or ())
         if fetchall:
-            rows = [dict(r) for r in cur.fetchall()]
+            rows = cur.fetchall()
             conn.close()
-            return rows
+            return rows if USE_PG else [dict(r) for r in rows]
         if fetchone:
             r = cur.fetchone()
             conn.close()
-            return dict(r) if r else None
+            if r is None: return None
+            return r if USE_PG else dict(r)
         if scalar:
             r = cur.fetchone()
             conn.close()
             if r is None: return 0
-            v = list(dict(r).values())[0] if USE_PG else r[0]
+            v = list(r.values())[0] if USE_PG else r[0]
             return v or 0
         conn.commit()
         conn.close()
     except Exception as e:
         try: conn.rollback()
         except: pass
-        conn.close()
+        try: conn.close()
+        except: pass
         raise e
 
 def init_db():
     conn = get_conn()
     try:
-        if USE_PG:
-            import psycopg2.extras
-            cur = conn.cursor()
-        else:
-            cur = conn.cursor()
+        cur = conn.cursor()
 
         tabelas = """
 CREATE TABLE IF NOT EXISTS empresas (id {pk}, nome TEXT NOT NULL, cnpj TEXT, email TEXT, telefone TEXT, plano TEXT DEFAULT 'basico', ativo INTEGER DEFAULT 1, vencimento TEXT, criado_em TEXT);
@@ -117,7 +112,7 @@ CREATE TABLE IF NOT EXISTS audit_log (id {pk}, empresa_id INTEGER DEFAULT 1, usu
             try:
                 cur.execute(stmt)
                 conn.commit()
-            except Exception as e:
+            except:
                 conn.rollback()
 
         def ins(sql, params):
