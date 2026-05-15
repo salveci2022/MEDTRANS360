@@ -104,8 +104,12 @@ def enviar_email(dest, assunto, html):
             msg = MIMEMultipart("alternative")
             msg["Subject"] = assunto; msg["From"] = f"MEDTRANS 360 <{GMAIL_USER}>"; msg["To"] = dest
             msg.attach(MIMEText(html,"html","utf-8"))
-            with smtplib.SMTP_SSL("smtp.gmail.com",465,timeout=10) as srv:
-                srv.login(GMAIL_USER, GMAIL_PASS); srv.sendmail(GMAIL_USER, dest, msg.as_string())
+            with smtplib.SMTP("smtp.gmail.com", 587, timeout=15) as srv:
+                srv.ehlo()
+                srv.starttls()
+                srv.ehlo()
+                srv.login(GMAIL_USER, GMAIL_PASS)
+                srv.sendmail(GMAIL_USER, dest, msg.as_string())
         except Exception as e: log.error(f"Email: {e}")
     threading.Thread(target=_s, daemon=True).start()
 
@@ -611,6 +615,136 @@ def relatorio_pdf():
 @app.route('/vendas')
 def vendas():
     return render_template('vendas.html')
+
+
+# ─────────────────────────────────────────────────────────
+#  WEBHOOK HOTMART — Cadastro automático de clientes
+# ─────────────────────────────────────────────────────────
+import secrets as _secrets
+
+def gerar_senha():
+    return _secrets.token_urlsafe(8)
+
+@app.route('/webhook/hotmart', methods=['POST'])
+def webhook_hotmart():
+    """Recebe notificação do Hotmart e cria empresa + usuário admin"""
+    try:
+        data = request.get_json(silent=True) or {}
+        evento = data.get('event', '')
+        
+        # Processar apenas compras aprovadas
+        if evento not in ('PURCHASE_APPROVED', 'PURCHASE_COMPLETE'):
+            return jsonify({'ok': True, 'msg': 'evento ignorado'})
+        
+        buyer = data.get('data', {}).get('buyer', {})
+        subscription = data.get('data', {}).get('subscription', {})
+        product = data.get('data', {}).get('product', {})
+        
+        nome_cliente = buyer.get('name', 'Cliente')
+        email_cliente = buyer.get('email', '')
+        plano = product.get('name', 'basico')
+        
+        if not email_cliente:
+            return jsonify({'ok': False, 'msg': 'email não encontrado'}), 400
+        
+        # Verificar se já existe
+        conn = get_conn()
+        usuario_existente = None
+        if USE_PG:
+            import psycopg2.extras
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("SELECT * FROM usuarios WHERE email=%s", (email_cliente,))
+        else:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM usuarios WHERE email=?", (email_cliente,))
+        usuario_existente = cur.fetchone()
+        
+        if usuario_existente:
+            conn.close()
+            return jsonify({'ok': True, 'msg': 'cliente já cadastrado'})
+        
+        # Criar empresa
+        if USE_PG:
+            cur.execute("""INSERT INTO empresas(nome,email,plano,ativo,criado_em) 
+                          VALUES(%s,%s,%s,1,%s) RETURNING id""",
+                       (nome_cliente, email_cliente, plano, now_str()))
+            empresa_id = cur.fetchone()['id']
+        else:
+            cur.execute("""INSERT INTO empresas(nome,email,plano,ativo,criado_em) 
+                          VALUES(?,?,?,1,?)""",
+                       (nome_cliente, email_cliente, plano, now_str()))
+            empresa_id = cur.lastrowid
+        
+        # Gerar senha e criar usuário admin da empresa
+        senha = gerar_senha()
+        if USE_PG:
+            cur.execute("""INSERT INTO usuarios(empresa_id,nome,email,senha,perfil,ativo,criado_em)
+                          VALUES(%s,%s,%s,%s,'master',1,%s)""",
+                       (empresa_id, nome_cliente, email_cliente, hash_senha(senha), now_str()))
+        else:
+            cur.execute("""INSERT INTO usuarios(empresa_id,nome,email,senha,perfil,ativo,criado_em)
+                          VALUES(?,?,?,?,'master',1,?)""",
+                       (empresa_id, nome_cliente, email_cliente, hash_senha(senha), now_str()))
+        
+        conn.commit()
+        conn.close()
+        
+        # Enviar e-mail de boas-vindas com credenciais
+        html_bv = f"""
+        <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;background:#0d1b2e;color:#e8f4ff;padding:24px;border-radius:12px">
+          <div style="text-align:center;margin-bottom:20px">
+            <div style="font-size:1.4rem;font-weight:900;color:#00bcd4;letter-spacing:2px">MEDTRANS 360</div>
+            <div style="font-size:.8rem;color:#4a7898">Plataforma de Transporte Médico</div>
+          </div>
+          <div style="background:#162840;border:1px solid #1e3a55;border-radius:10px;padding:20px;margin-bottom:16px">
+            <div style="font-size:1.1rem;font-weight:700;color:#00bcd4;margin-bottom:16px">🎉 Bem-vindo ao MEDTRANS 360!</div>
+            <p style="color:#90bcd8;margin-bottom:16px">Olá, <strong style="color:#e8f4ff">{nome_cliente}</strong>! Seu acesso foi criado com sucesso.</p>
+            <table style="width:100%;font-size:.85rem;border-collapse:collapse">
+              <tr><td style="padding:8px 0;color:#6090b0">Plano</td><td style="color:#00bcd4;font-weight:700">{plano}</td></tr>
+              <tr><td style="padding:8px 0;color:#6090b0">URL do sistema</td><td><a href="https://medtrans360.onrender.com" style="color:#00bcd4">medtrans360.onrender.com</a></td></tr>
+              <tr><td style="padding:8px 0;color:#6090b0">E-mail de acesso</td><td style="color:#e8f4ff">{email_cliente}</td></tr>
+              <tr><td style="padding:8px 0;color:#6090b0">Senha inicial</td><td style="color:#00e676;font-weight:700;font-size:1rem">{senha}</td></tr>
+            </table>
+          </div>
+          <div style="background:rgba(255,152,0,.1);border:1px solid rgba(255,152,0,.3);border-radius:8px;padding:12px;margin-bottom:16px">
+            <p style="color:#ff9800;font-size:.8rem;margin:0">⚠️ Por segurança, altere sua senha após o primeiro acesso.</p>
+          </div>
+          <div style="text-align:center;font-size:.7rem;color:#4a7898">
+            SPYNET Tecnologia Forense · CNPJ 64.000.808/0001-51<br>
+            Suporte: medtranscontrole@gmail.com · (61) 99396-2090
+          </div>
+        </div>
+        """
+        enviar_email(email_cliente, 
+                     "🎉 Bem-vindo ao MEDTRANS 360 — Seus dados de acesso",
+                     html_bv)
+        
+        # Notificar empresa
+        notif_empresa = f"""
+        <div style="font-family:Arial;background:#0d1b2e;color:#e8f4ff;padding:20px;border-radius:10px">
+          <h3 style="color:#00e676">✅ Nova venda MEDTRANS 360!</h3>
+          <p>Cliente: <strong>{nome_cliente}</strong></p>
+          <p>E-mail: {email_cliente}</p>
+          <p>Plano: {plano}</p>
+          <p>Empresa ID: {empresa_id}</p>
+        </div>
+        """
+        enviar_email(EMPRESA_EMAIL,
+                     f"[MEDTRANS 360] ✅ Nova venda — {nome_cliente}",
+                     notif_empresa)
+        
+        log.info(f"Novo cliente Hotmart: {email_cliente} | Plano: {plano}")
+        return jsonify({'ok': True, 'msg': 'cliente cadastrado', 'empresa_id': empresa_id})
+    
+    except Exception as e:
+        log.error(f"Webhook Hotmart erro: {e}")
+        return jsonify({'ok': False, 'erro': str(e)}), 500
+
+
+@app.route('/webhook/test', methods=['GET'])
+def webhook_test():
+    """Testa se o webhook está funcionando"""
+    return jsonify({'ok': True, 'msg': 'Webhook MEDTRANS 360 ativo', 'url': request.url})
 
 @app.route('/acesso-negado')
 def acesso_negado():
