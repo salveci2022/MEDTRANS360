@@ -1,0 +1,375 @@
+{% extends 'base.html' %}
+{% block title %}Performance de Motoristas — MEDTRANS 360{% endblock %}
+{% block page_title %}Performance de Motoristas{% endblock %}
+{% block extra_css %}
+<style>
+.perf-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px}
+.filtros{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn-export{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:7px;font-size:.75rem;font-weight:600;cursor:pointer;border:none;text-decoration:none;font-family:var(--font)}
+.btn-pdf{background:#e53935;color:#fff}.btn-pdf:hover{background:#c62828}
+.btn-excel{background:#2e7d32;color:#fff}.btn-excel:hover{background:#1b5e20}
+.btn-print{background:#1565c0;color:#fff}.btn-print:hover{background:#0d47a1}
+.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}
+.metric-card{background:#fff;border:1px solid #dde4ed;border-radius:10px;padding:16px;position:relative;overflow:hidden;transition:all .2s;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.metric-card:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.1)}
+.metric-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent,#00bcd4)}
+.metric-icon{position:absolute;right:12px;top:50%;transform:translateY(-50%);opacity:.08;font-size:2.5rem}
+.metric-label{font-size:.6rem;color:#8aa0b8;text-transform:uppercase;letter-spacing:1px;font-weight:600;margin-bottom:6px}
+.metric-value{font-size:2rem;font-weight:800;line-height:1;color:#1a2a3a;margin-bottom:2px}
+.metric-sub{font-size:.65rem;color:#8aa0b8}
+.charts-grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:20px}
+.ranking-table tbody tr:first-child td{background:rgba(255,215,0,.08)}
+.ranking-table tbody tr:nth-child(2) td{background:rgba(192,192,192,.08)}
+.ranking-table tbody tr:nth-child(3) td{background:rgba(205,127,50,.08)}
+.rank-badge{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font-size:.7rem;font-weight:800}
+.rank-1{background:linear-gradient(135deg,#ffd700,#ffa000);color:#000}
+.rank-2{background:linear-gradient(135deg,#e0e0e0,#9e9e9e);color:#000}
+.rank-3{background:linear-gradient(135deg,#ffb74d,#f57c00);color:#000}
+.rank-n{background:#e8f0fe;color:#1565c0}
+.progress-bar{height:6px;background:#e8f0fe;border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;border-radius:3px;transition:width .6s ease;background:linear-gradient(90deg,#00bcd4,#0066ff)}
+.online-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:10px;font-size:.62rem;font-weight:700}
+.online-badge.online{background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7}
+.online-badge.offline{background:#f5f5f5;color:#9e9e9e;border:1px solid #e0e0e0}
+.online-dot{width:6px;height:6px;border-radius:50%;animation:pulse 2s infinite}
+.online-dot.green{background:#4caf50}
+.online-dot.gray{background:#9e9e9e;animation:none}
+@media(max-width:768px){.charts-grid{grid-template-columns:1fr}.metric-grid{grid-template-columns:repeat(2,1fr)}}
+@media print{.btn-export,.filtros,.sidebar,.topbar{display:none!important}.main{margin-left:0!important}}
+</style>
+{% endblock %}
+{% block content %}
+
+<!-- HEADER -->
+<div class="perf-header">
+  <div>
+    <h2 style="font-size:1.1rem;font-weight:800;color:#1a2a3a">Dashboard de Performance</h2>
+    <p style="font-size:.75rem;color:#8aa0b8;margin-top:2px">Análise completa de produtividade e eficiência da frota</p>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <a href="/relatorios/performance/pdf" class="btn-export btn-pdf" target="_blank">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Exportar PDF
+    </a>
+    <button class="btn-export btn-excel" onclick="exportarExcel()">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+      Exportar Excel
+    </button>
+    <button class="btn-export btn-print" onclick="window.print()">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Imprimir
+    </button>
+    <button class="btn-export" style="background:#00bcd4;color:#000" onclick="location.reload()">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+      Atualizar
+    </button>
+  </div>
+</div>
+
+<!-- FILTROS -->
+<div class="card" style="margin-bottom:16px;padding:12px 16px">
+  <form method="GET" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+    <div>
+      <label class="form-label">Período</label>
+      <select name="periodo" class="form-control" style="width:140px" onchange="this.form.submit()">
+        <option value="7" {% if periodo=='7' %}selected{% endif %}>Últimos 7 dias</option>
+        <option value="30" {% if periodo=='30' or not periodo %}selected{% endif %}>Últimos 30 dias</option>
+        <option value="90" {% if periodo=='90' %}selected{% endif %}>Últimos 90 dias</option>
+        <option value="365" {% if periodo=='365' %}selected{% endif %}>Este ano</option>
+      </select>
+    </div>
+    <div>
+      <label class="form-label">Motorista</label>
+      <select name="motorista_id" class="form-control" style="width:180px" onchange="this.form.submit()">
+        <option value="">Todos os motoristas</option>
+        {% for m in motoristas_lista %}
+        <option value="{{ m.id }}" {% if motorista_id==m.id|string %}selected{% endif %}>{{ m.nome }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-teal btn-sm">Filtrar</button>
+    <a href="/relatorios/performance" class="btn btn-ghost btn-sm">Limpar</a>
+  </form>
+</div>
+
+<!-- MÉTRICAS PRINCIPAIS -->
+<div class="metric-grid">
+  <div class="metric-card" style="--accent:#00bcd4">
+    <div class="metric-label">Total de Corridas</div>
+    <div class="metric-value">{{ stats.total_corridas }}</div>
+    <div class="metric-sub">{{ stats.em_andamento }} em andamento</div>
+    <div class="metric-icon">🚑</div>
+  </div>
+  <div class="metric-card" style="--accent:#00b894">
+    <div class="metric-label">Concluídas</div>
+    <div class="metric-value" style="color:#00b894">{{ stats.concluidas }}</div>
+    <div class="metric-sub">Taxa: {{ stats.taxa_conclusao }}%</div>
+    <div class="metric-icon">✅</div>
+  </div>
+  <div class="metric-card" style="--accent:#0066ff">
+    <div class="metric-label">KM Rodado</div>
+    <div class="metric-value" style="font-size:1.5rem">{{ stats.km_total }}</div>
+    <div class="metric-sub">km total da frota</div>
+    <div class="metric-icon">📍</div>
+  </div>
+  <div class="metric-card" style="--accent:#4caf50">
+    <div class="metric-label">Receita Total</div>
+    <div class="metric-value" style="font-size:1.4rem;color:#2e7d32">R${{ "%.0f"|format(stats.receita_total) }}</div>
+    <div class="metric-sub">R$ {{ "%.2f"|format(stats.receita_por_corrida) }}/corrida</div>
+    <div class="metric-icon">💰</div>
+  </div>
+  <div class="metric-card" style="--accent:#f57c00">
+    <div class="metric-label">Custo Combustível</div>
+    <div class="metric-value" style="font-size:1.4rem;color:#e65100">R${{ "%.0f"|format(stats.custo_combustivel) }}</div>
+    <div class="metric-sub">R$ {{ stats.custo_por_km }}/km</div>
+    <div class="metric-icon">⛽</div>
+  </div>
+  <div class="metric-card" style="--accent:#9c27b0">
+    <div class="metric-label">Motoristas Ativos</div>
+    <div class="metric-value">{{ stats.mot_total }}</div>
+    <div class="metric-sub">{{ stats.mot_online }} online agora</div>
+    <div class="metric-icon">👤</div>
+  </div>
+  <div class="metric-card" style="--accent:#1565c0">
+    <div class="metric-label">Agendadas</div>
+    <div class="metric-value" style="color:#1565c0">{{ stats.agendadas }}</div>
+    <div class="metric-sub">aguardando início</div>
+    <div class="metric-icon">📅</div>
+  </div>
+  <div class="metric-card" style="--accent:#00bcd4">
+    <div class="metric-label">Taxa de Conclusão</div>
+    <div class="metric-value" style="color:#00bcd4">{{ stats.taxa_conclusao }}%</div>
+    <div class="progress-bar" style="margin-top:6px"><div class="progress-fill" style="width:{{ stats.taxa_conclusao }}%"></div></div>
+    <div class="metric-icon">📊</div>
+  </div>
+</div>
+
+<!-- GRÁFICOS -->
+<div class="charts-grid">
+  <!-- Gráfico de corridas por dia -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Corridas por Dia (últimos 7 dias)</span>
+    </div>
+    <canvas id="chartSemana" height="180"></canvas>
+  </div>
+
+  <!-- Corridas por tipo -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Por Tipo de Serviço</span>
+    </div>
+    <canvas id="chartTipo" height="180"></canvas>
+  </div>
+</div>
+
+<!-- RANKING DE MOTORISTAS -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-header">
+    <span class="card-title">🏆 Ranking de Motoristas</span>
+    <div style="display:flex;gap:6px">
+      <input type="text" id="busca-ranking" placeholder="Buscar motorista..." class="form-control" style="width:180px;padding:5px 10px;font-size:.75rem" oninput="filtrarRanking()">
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table id="tabela-ranking" class="ranking-table">
+      <thead>
+        <tr>
+          <th style="width:50px">Rank</th>
+          <th>Motorista</th>
+          <th>Status</th>
+          <th>Corridas</th>
+          <th>Concluídas</th>
+          <th>KM Total</th>
+          <th>Receita</th>
+          <th>Taxa</th>
+          <th>Produtividade</th>
+          <th>Última Corrida</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i, m in ranking|enumerate %}
+        {% set taxa = ((m.concluidas / m.total_corridas * 100) if m.total_corridas else 0)|round(1) %}
+        {% set online = m.em_andamento > 0 %}
+        <tr>
+          <td style="text-align:center">
+            <span class="rank-badge rank-{{ i+1 if i < 3 else 'n' }}">{{ i+1 }}</span>
+          </td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#00bcd4,#0066ff);display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;color:#fff;flex-shrink:0">
+                {{ (m.nome or 'M')[0].upper() }}
+              </div>
+              <div>
+                <div style="font-weight:600;color:#1a2a3a">{{ m.nome }}</div>
+                <div style="font-size:.65rem;color:#8aa0b8">{{ m.telefone or '—' }}</div>
+              </div>
+            </div>
+          </td>
+          <td>
+            <span class="online-badge {{ 'online' if online else 'offline' }}">
+              <span class="online-dot {{ 'green' if online else 'gray' }}"></span>
+              {{ 'Online' if online else 'Offline' }}
+            </span>
+          </td>
+          <td style="text-align:center;font-weight:600">{{ m.total_corridas }}</td>
+          <td style="text-align:center">
+            <span style="color:#2e7d32;font-weight:700">{{ m.concluidas }}</span>
+          </td>
+          <td style="text-align:center">{{ "%.1f"|format(m.km_total) }} km</td>
+          <td style="text-align:center;color:#2e7d32;font-weight:600">R$ {{ "%.2f"|format(m.receita) }}</td>
+          <td style="text-align:center">
+            <span style="font-weight:700;color:{{ '#2e7d32' if taxa >= 80 else '#f57c00' if taxa >= 50 else '#e53935' }}">
+              {{ taxa }}%
+            </span>
+          </td>
+          <td style="min-width:120px">
+            <div class="progress-bar"><div class="progress-fill" style="width:{{ taxa }}%;background:{{ 'linear-gradient(90deg,#00b894,#00bcd4)' if taxa >= 80 else 'linear-gradient(90deg,#ff9800,#f57c00)' if taxa >= 50 else 'linear-gradient(90deg,#e53935,#c62828)' }}"></div></div>
+          </td>
+          <td style="font-size:.7rem;color:#8aa0b8">{{ m.ultima_corrida or '—' }}</td>
+        </tr>
+        {% endfor %}
+        {% if not ranking %}
+        <tr><td colspan="10" style="text-align:center;padding:24px;color:#8aa0b8">Nenhum motorista cadastrado</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- CONSUMO DE COMBUSTÍVEL -->
+<div class="two-col" style="margin-bottom:16px">
+  <div class="card">
+    <div class="card-header"><span class="card-title">⛽ Consumo por Motorista</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Motorista</th><th>Abastecimentos</th><th>Litros</th><th>Custo Total</th></tr></thead>
+        <tbody>
+          {% for c in combustivel_mot %}
+          <tr>
+            <td><strong>{{ c.nome }}</strong></td>
+            <td style="text-align:center">{{ c.abastecimentos }}</td>
+            <td style="text-align:center">{{ "%.1f"|format(c.litros_total) }}L</td>
+            <td style="color:{{ '#e53935' if c.custo_total > 500 else '#f57c00' if c.custo_total > 200 else '#2e7d32' }};font-weight:600">
+              R$ {{ "%.2f"|format(c.custo_total) }}
+            </td>
+          </tr>
+          {% endfor %}
+          {% if not combustivel_mot %}
+          <tr><td colspan="4" style="text-align:center;padding:16px;color:#8aa0b8">Sem dados de combustível</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Corridas recentes -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">🚑 Corridas Recentes</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Motorista</th><th>Paciente</th><th>Status</th><th>KM</th></tr></thead>
+        <tbody>
+          {% for c in corridas_recentes[:10] %}
+          <tr>
+            <td><strong>{{ c.id }}</strong></td>
+            <td style="font-size:.72rem">{{ c.motorista_nome or '—' }}</td>
+            <td style="font-size:.72rem">{{ c.paciente_nome or '—' }}</td>
+            <td><span class="status s-{{ c.status }}">{{ c.status.replace('_',' ') }}</span></td>
+            <td style="font-size:.72rem">{{ "%.1f"|format(c.km_total or 0) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+// Dados dos gráficos
+const semana = {{ corridas_semana | tojson }};
+const tipos = {{ por_tipo | tojson }};
+
+// Gráfico de corridas por semana
+new Chart(document.getElementById('chartSemana'), {
+  type: 'bar',
+  data: {
+    labels: semana.map(s => s.dia),
+    datasets: [{
+      label: 'Corridas',
+      data: semana.map(s => s.total),
+      backgroundColor: 'rgba(0,188,212,.7)',
+      borderColor: '#00bcd4',
+      borderWidth: 1,
+      borderRadius: 5,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 } }, grid: { color: 'rgba(0,0,0,.05)' } },
+      x: { ticks: { font: { size: 11 } }, grid: { display: false } }
+    }
+  }
+});
+
+// Gráfico de tipos
+const coresTipo = ['#00bcd4','#0066ff','#00b894','#f57c00','#9c27b0','#e53935'];
+new Chart(document.getElementById('chartTipo'), {
+  type: 'doughnut',
+  data: {
+    labels: tipos.map(t => t.tipo_servico || 'outros'),
+    datasets: [{
+      data: tipos.map(t => t.total),
+      backgroundColor: coresTipo,
+      borderWidth: 2,
+      borderColor: '#fff',
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10 } }
+    }
+  }
+});
+
+// Filtro ranking
+function filtrarRanking() {
+  const t = document.getElementById('busca-ranking').value.toLowerCase();
+  document.querySelectorAll('#tabela-ranking tbody tr').forEach(tr => {
+    tr.style.display = tr.textContent.toLowerCase().includes(t) ? '' : 'none';
+  });
+}
+
+// Exportar Excel (CSV)
+function exportarExcel() {
+  const rows = [['Rank','Motorista','Corridas','Concluídas','KM Total','Receita','Taxa %']];
+  document.querySelectorAll('#tabela-ranking tbody tr').forEach((tr, i) => {
+    const tds = tr.querySelectorAll('td');
+    if (tds.length > 5) {
+      rows.push([
+        i+1,
+        tds[1].querySelector('div > div')?.textContent.trim() || '',
+        tds[3].textContent.trim(),
+        tds[4].textContent.trim(),
+        tds[5].textContent.trim(),
+        tds[6].textContent.trim(),
+        tds[7].textContent.trim(),
+      ]);
+    }
+  });
+  const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'Performance-Motoristas.csv';
+  a.click();
+}
+
+// Atualização automática a cada 60 segundos
+setTimeout(() => location.reload(), 60000);
+</script>
+{% endblock %}

@@ -15,10 +15,16 @@ from database import init_db, get_conn, audit, now_str, hoje_str, hash_senha
 # ── Config ────────────────────────────────────────────────
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+# Filtro enumerate para templates Jinja2
+import builtins
+app_env = None  # será definido após criação do app
+
 app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax',
                   PERMANENT_SESSION_LIFETIME=timedelta(hours=12))
 
 TZ = ZoneInfo('America/Sao_Paulo')
+app.jinja_env.globals['enumerate'] = enumerate
+app.jinja_env.globals['zip'] = zip
 log = logging.getLogger('medtrans')
 logging.basicConfig(level=logging.INFO)
 
@@ -697,6 +703,237 @@ def excluir_usuario(uid):
     conn.commit(); conn.close()
     audit(session.get('email'),'excluir_usuario',f'ID:{uid}',get_ip())
     return jsonify({'ok':True})
+
+# ── PERFORMANCE DE MOTORISTAS ─────────────────────────────
+@app.route('/relatorios/performance')
+@perfil_required('master','operador')
+def performance_motoristas():
+    conn = get_conn()
+    eid = session.get('empresa_id', 1)
+
+    # Filtros
+    periodo = request.args.get('periodo', '30')
+    motorista_id = request.args.get('motorista_id', '')
+
+    from datetime import datetime as dt, timedelta as td
+    TZ2 = ZoneInfo('America/Sao_Paulo')
+
+    # Datas para filtro
+    dias = int(periodo) if periodo.isdigit() else 30
+    data_inicio = (dt.now(TZ2) - td(days=dias)).strftime('%d/%m/%Y')
+
+    # Lista de motoristas para filtro
+    motoristas_lista = conn.execute(
+        "SELECT * FROM motoristas WHERE ativo=1 AND empresa_id=? ORDER BY nome", (eid,)
+    ).fetchall()
+
+    # Query base
+    filtro_mot = f" AND c.motorista_id={motorista_id}" if motorista_id else ""
+
+    # Stats gerais
+    total_corridas = conn.execute(
+        f"SELECT COUNT(*) FROM corridas c WHERE c.empresa_id=?{filtro_mot}", (eid,)
+    ).fetchone()[0]
+
+    concluidas = conn.execute(
+        f"SELECT COUNT(*) FROM corridas c WHERE c.status='concluida' AND c.empresa_id=?{filtro_mot}", (eid,)
+    ).fetchone()[0]
+
+    em_andamento = conn.execute(
+        f"SELECT COUNT(*) FROM corridas c WHERE c.status='em_andamento' AND c.empresa_id=?{filtro_mot}", (eid,)
+    ).fetchone()[0]
+
+    agendadas = conn.execute(
+        f"SELECT COUNT(*) FROM corridas c WHERE c.status='agendada' AND c.empresa_id=?{filtro_mot}", (eid,)
+    ).fetchone()[0]
+
+    km_total = conn.execute(
+        f"SELECT COALESCE(SUM(km_total),0) FROM corridas c WHERE c.status='concluida' AND c.empresa_id=?{filtro_mot}", (eid,)
+    ).fetchone()[0] or 0
+
+    receita_total = conn.execute(
+        f"SELECT COALESCE(SUM(valor),0) FROM corridas c WHERE c.status='concluida' AND c.empresa_id=?{filtro_mot}", (eid,)
+    ).fetchone()[0] or 0
+
+    custo_combustivel = conn.execute(
+        "SELECT COALESCE(SUM(valor_total),0) FROM combustivel WHERE empresa_id=?", (eid,)
+    ).fetchone()[0] or 0
+
+    # Motoristas online (com corrida em andamento)
+    mot_online = conn.execute(
+        "SELECT COUNT(DISTINCT motorista_id) FROM corridas WHERE status='em_andamento' AND empresa_id=?", (eid,)
+    ).fetchone()[0]
+
+    # Ranking de motoristas
+    ranking = conn.execute(f"""
+        SELECT m.id, m.nome, m.telefone,
+               COUNT(c.id) as total_corridas,
+               SUM(CASE WHEN c.status='concluida' THEN 1 ELSE 0 END) as concluidas,
+               SUM(CASE WHEN c.status='em_andamento' THEN 1 ELSE 0 END) as em_andamento,
+               COALESCE(SUM(c.km_total),0) as km_total,
+               COALESCE(SUM(c.valor),0) as receita,
+               COALESCE(AVG(c.km_total),0) as km_medio,
+               MAX(c.criado_em) as ultima_corrida
+        FROM motoristas m
+        LEFT JOIN corridas c ON m.id=c.motorista_id AND c.empresa_id=?
+        WHERE m.empresa_id=? AND m.ativo=1
+        GROUP BY m.id, m.nome, m.telefone
+        ORDER BY concluidas DESC, km_total DESC
+    """, (eid, eid)).fetchall()
+
+    # Combustível por motorista
+    combustivel_mot = conn.execute("""
+        SELECT m.nome, 
+               COUNT(cb.id) as abastecimentos,
+               COALESCE(SUM(cb.litros),0) as litros_total,
+               COALESCE(SUM(cb.valor_total),0) as custo_total
+        FROM motoristas m
+        LEFT JOIN combustivel cb ON m.id=cb.motorista_id
+        WHERE m.empresa_id=? AND m.ativo=1
+        GROUP BY m.id, m.nome
+        ORDER BY custo_total DESC
+    """, (eid,)).fetchall()
+
+    # Corridas por dia (últimos 7 dias)
+    corridas_semana = []
+    for i in range(6, -1, -1):
+        d = (dt.now(TZ2) - td(days=i)).strftime('%d/%m/%Y')
+        n = conn.execute(
+            "SELECT COUNT(*) FROM corridas WHERE data_agendada=? AND empresa_id=?", (d, eid)
+        ).fetchone()[0]
+        corridas_semana.append({'dia': (dt.now(TZ2) - td(days=i)).strftime('%d/%m'), 'total': n})
+
+    # Corridas por tipo
+    por_tipo = conn.execute("""
+        SELECT tipo_servico, COUNT(*) as total,
+               COALESCE(SUM(km_total),0) as km,
+               COALESCE(SUM(valor),0) as receita
+        FROM corridas WHERE empresa_id=? AND status='concluida'
+        GROUP BY tipo_servico ORDER BY total DESC
+    """, (eid,)).fetchall()
+
+    # Corridas recentes detalhadas
+    corridas_recentes = conn.execute("""
+        SELECT c.*, m.nome as motorista_nome, p.nome as paciente_nome,
+               v.modelo as veiculo_modelo, v.placa
+        FROM corridas c
+        LEFT JOIN motoristas m ON c.motorista_id=m.id
+        LEFT JOIN pacientes p ON c.paciente_id=p.id
+        LEFT JOIN veiculos v ON c.veiculo_id=v.id
+        WHERE c.empresa_id=?
+        ORDER BY c.id DESC LIMIT 20
+    """, (eid,)).fetchall()
+
+    conn.close()
+    audit(session.get('email'), 'ver_performance', '', get_ip())
+
+    taxa_conclusao = round((concluidas / total_corridas * 100) if total_corridas else 0, 1)
+    custo_por_km = round(custo_combustivel / km_total, 2) if km_total > 0 else 0
+    receita_por_corrida = round(receita_total / concluidas, 2) if concluidas > 0 else 0
+
+    return render_template('performance.html',
+        motoristas_lista=motoristas_lista,
+        ranking=ranking,
+        combustivel_mot=combustivel_mot,
+        corridas_semana=corridas_semana,
+        por_tipo=por_tipo,
+        corridas_recentes=corridas_recentes,
+        stats={
+            'total_corridas': total_corridas,
+            'concluidas': concluidas,
+            'em_andamento': em_andamento,
+            'agendadas': agendadas,
+            'km_total': round(km_total, 1),
+            'receita_total': receita_total,
+            'custo_combustivel': custo_combustivel,
+            'mot_online': mot_online,
+            'mot_total': len(motoristas_lista),
+            'taxa_conclusao': taxa_conclusao,
+            'custo_por_km': custo_por_km,
+            'receita_por_corrida': receita_por_corrida,
+        },
+        periodo=periodo,
+        motorista_id=motorista_id,
+        usuario=session.get('nome'),
+        perfil=session.get('perfil')
+    )
+
+@app.route('/relatorios/performance/pdf')
+@perfil_required('master','operador')
+def performance_pdf():
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT
+
+    conn = get_conn()
+    eid = session.get('empresa_id', 1)
+
+    ranking = conn.execute("""
+        SELECT m.nome,
+               COUNT(c.id) as total_corridas,
+               SUM(CASE WHEN c.status='concluida' THEN 1 ELSE 0 END) as concluidas,
+               COALESCE(SUM(c.km_total),0) as km_total,
+               COALESCE(SUM(c.valor),0) as receita
+        FROM motoristas m
+        LEFT JOIN corridas c ON m.id=c.motorista_id
+        WHERE m.empresa_id=? AND m.ativo=1
+        GROUP BY m.id, m.nome ORDER BY concluidas DESC
+    """, (eid,)).fetchall()
+    conn.close()
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=2*cm, rightMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
+    styles = getSampleStyleSheet()
+    azul = colors.HexColor('#0066cc')
+    dark = colors.HexColor('#0d1a2e')
+    verde = colors.HexColor('#00b894')
+    cinza = colors.HexColor('#8ba3c7')
+
+    def P(txt, sz=9, bold=False, color=None, align=TA_CENTER):
+        fn = 'Helvetica-Bold' if bold else 'Helvetica'
+        c = color or colors.HexColor('#333333')
+        return Paragraph(txt, ParagraphStyle('p', fontSize=sz, fontName=fn, textColor=c, alignment=align))
+
+    story = [
+        P('MEDTRANS 360', 20, True, azul),
+        P('Relatório de Performance de Motoristas', 11, False, cinza),
+        P(f'Gerado em {now_str()} por {session.get("nome","?")}', 8, False, cinza),
+        HRFlowable(width='100%', thickness=1, color=azul, spaceAfter=12),
+    ]
+
+    rows = [[P(h, 8, True, azul) for h in ['#', 'Motorista', 'Total Corridas', 'Concluídas', 'KM Total', 'Receita', 'Taxa %']]]
+    for i, m in enumerate(ranking, 1):
+        taxa = round((m['concluidas'] / m['total_corridas'] * 100) if m['total_corridas'] else 0, 1)
+        rows.append([
+            P(str(i), 8), P(m['nome'] or '—', 8, False, colors.HexColor('#1a2a3a'), TA_LEFT),
+            P(str(m['total_corridas']), 8), P(str(m['concluidas']), 8, True, verde),
+            P(f"{m['km_total']:.1f} km", 8), P(f"R$ {m['receita']:.2f}", 8, True, verde),
+            P(f"{taxa}%", 8, True, azul)
+        ])
+
+    t = Table(rows, colWidths=[1*cm, 5*cm, 2.5*cm, 2.5*cm, 2.5*cm, 2.5*cm, 1.5*cm], repeatRows=1)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#e8f0fe')),
+        ('GRID', (0,0), (-1,-1), 0.3, colors.HexColor('#dde4ed')),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+    ]))
+    story += [t, Spacer(1, 20),
+              HRFlowable(width='100%', thickness=0.5, color=cinza),
+              Spacer(1, 6),
+              P('SPYNET Tecnologia Forense · CNPJ 64.000.808/0001-51 · medtranscontrole@gmail.com', 7, False, cinza),
+              P('Documento gerado automaticamente pelo MEDTRANS 360', 7, False, cinza)]
+
+    doc.build(story)
+    buf.seek(0)
+    audit(session.get('email'), 'exportar_performance_pdf', '', get_ip())
+    return send_file(buf, mimetype='application/pdf', as_attachment=True,
+                     download_name=f'Performance-Motoristas-{datetime.now(TZ).strftime("%Y%m%d-%H%M")}.pdf')
 
 @app.route('/vendas')
 def vendas():
