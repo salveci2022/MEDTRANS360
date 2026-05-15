@@ -11,11 +11,34 @@ def now_str(): return datetime.now(TZ).strftime('%d/%m/%Y %H:%M:%S')
 def hoje_str(): return datetime.now(TZ).strftime('%d/%m/%Y')
 def hash_senha(s): return hashlib.sha256(s.encode()).hexdigest()
 
+def get_pg_conn():
+    """Conecta ao PostgreSQL tratando caracteres especiais na senha."""
+    import psycopg2, psycopg2.extras
+    from urllib.parse import urlparse, quote
+
+    url = DATABASE_URL
+    parsed = urlparse(url)
+
+    # Re-encode a senha para escapar caracteres especiais como @, #, !
+    usuario = parsed.username or ''
+    senha = parsed.password or ''
+    host = parsed.hostname or ''
+    porta = parsed.port or 5432
+    banco = (parsed.path or '/postgres').lstrip('/')
+
+    conn = psycopg2.connect(
+        host=host,
+        port=porta,
+        dbname=banco,
+        user=usuario,
+        password=senha,
+        sslmode='require'
+    )
+    return conn
+
 def get_conn():
     if USE_PG:
-        import psycopg2, psycopg2.extras
-        conn = psycopg2.connect(DATABASE_URL)
-        return conn
+        return get_pg_conn()
     else:
         import sqlite3
         db = os.environ.get('MEDTRANS_DB_PATH',
@@ -102,7 +125,6 @@ CREATE TABLE IF NOT EXISTS audit_log (id {pk}, empresa_id INTEGER DEFAULT 1, usu
             try:
                 if USE_PG:
                     sql2 = sql.replace('?','%s').replace('INSERT OR IGNORE','INSERT').replace('VALUES(','VALUES(') 
-                    # Adicionar ON CONFLICT DO NOTHING para PG
                     if 'ON CONFLICT' not in sql2:
                         sql2 += ' ON CONFLICT DO NOTHING'
                     cur.execute(sql2, params)
