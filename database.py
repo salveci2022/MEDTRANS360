@@ -12,19 +12,18 @@ def hoje_str(): return datetime.now(TZ).strftime('%d/%m/%Y')
 def hash_senha(s): return hashlib.sha256(s.encode()).hexdigest()
 
 def get_pg_conn():
-    """Conecta ao PostgreSQL tratando caracteres especiais na senha."""
-    import psycopg2, psycopg2.extras
-    from urllib.parse import urlparse, quote
+    """Conecta ao PostgreSQL usando parâmetros separados (evita problemas com @ na senha)."""
+    import psycopg2
+    from urllib.parse import urlparse
 
-    url = DATABASE_URL
-    parsed = urlparse(url)
+    parsed = urlparse(DATABASE_URL)
+    usuario = parsed.username or 'postgres'
+    senha   = parsed.password or ''
+    host    = parsed.hostname or ''
+    porta   = parsed.port or 5432
+    banco   = (parsed.path or '/postgres').lstrip('/') or 'postgres'
 
-    # Re-encode a senha para escapar caracteres especiais como @, #, !
-    usuario = parsed.username or ''
-    senha = parsed.password or ''
-    host = parsed.hostname or ''
-    porta = parsed.port or 5432
-    banco = (parsed.path or '/postgres').lstrip('/')
+    print(f"[DB] Conectando: host={host} port={porta} user={usuario} db={banco}")
 
     conn = psycopg2.connect(
         host=host,
@@ -32,7 +31,8 @@ def get_pg_conn():
         dbname=banco,
         user=usuario,
         password=senha,
-        sslmode='require'
+        sslmode='require',
+        connect_timeout=10
     )
     return conn
 
@@ -120,11 +120,10 @@ CREATE TABLE IF NOT EXISTS audit_log (id {pk}, empresa_id INTEGER DEFAULT 1, usu
             except Exception as e:
                 conn.rollback()
 
-        # Dados demo
         def ins(sql, params):
             try:
                 if USE_PG:
-                    sql2 = sql.replace('?','%s').replace('INSERT OR IGNORE','INSERT').replace('VALUES(','VALUES(') 
+                    sql2 = sql.replace('?','%s').replace('INSERT OR IGNORE','INSERT')
                     if 'ON CONFLICT' not in sql2:
                         sql2 += ' ON CONFLICT DO NOTHING'
                     cur.execute(sql2, params)
@@ -135,23 +134,53 @@ CREATE TABLE IF NOT EXISTS audit_log (id {pk}, empresa_id INTEGER DEFAULT 1, usu
                 conn.rollback()
 
         ins("INSERT OR IGNORE INTO empresas(id,nome,email,plano,ativo,criado_em) VALUES(1,'MEDTRANS DEMO','medtranscontrole@gmail.com','pro',1,?)",(now_str(),))
-        for nome,email,senha,perfil in [('Administrador','admin@medtrans360.com.br',hash_senha('Admin@2025!'),'master'),('Operador','operador@medtrans360.com.br',hash_senha('Oper@2025!'),'operador'),('Clínica','clinica@medtrans360.com.br',hash_senha('Clinica@2025!'),'clinica'),('Motorista','motorista@medtrans360.com.br',hash_senha('Motor@2025!'),'motorista')]:
+        for nome,email,senha,perfil in [
+            ('Administrador','admin@medtrans360.com.br',hash_senha('Admin@2025!'),'master'),
+            ('Operador','operador@medtrans360.com.br',hash_senha('Oper@2025!'),'operador'),
+            ('Clínica','clinica@medtrans360.com.br',hash_senha('Clinica@2025!'),'clinica'),
+            ('Motorista','motorista@medtrans360.com.br',hash_senha('Motor@2025!'),'motorista')
+        ]:
             ins("INSERT OR IGNORE INTO usuarios(empresa_id,nome,email,senha,perfil,criado_em) VALUES(1,?,?,?,?,?)",(nome,email,senha,perfil,now_str()))
-        for m,p,a,t,k in [('Toyota Corolla','ABC-1234',2022,'sedan',45230),('Honda HRV','DEF-5678',2021,'suv',32100),('Renault Master','GHI-9012',2020,'van',78500),('Fiat Doblo','JKL-3456',2023,'minivan',12000),('VW Polo','MNO-7890',2022,'hatch',28400)]:
+        for m,p,a,t,k in [
+            ('Toyota Corolla','ABC-1234',2022,'sedan',45230),
+            ('Honda HRV','DEF-5678',2021,'suv',32100),
+            ('Renault Master','GHI-9012',2020,'van',78500),
+            ('Fiat Doblo','JKL-3456',2023,'minivan',12000),
+            ('VW Polo','MNO-7890',2022,'hatch',28400)
+        ]:
             ins("INSERT OR IGNORE INTO veiculos(empresa_id,modelo,placa,ano,tipo,km_atual,criado_em) VALUES(1,?,?,?,?,?,?)",(m,p,a,t,k,now_str()))
-        for n,cnh,tel,vid in [('Carlos Silva','12345678900','(61)99111-2222',1),('Ana Oliveira','98765432100','(61)99333-4444',2),('Roberto Lima','11122233344','(61)99555-6666',3),('Fernanda Costa','55566677788','(61)99777-8888',4),('João Mendes','99988877766','(61)99999-0000',5)]:
+        for n,cnh,tel,vid in [
+            ('Carlos Silva','12345678900','(61)99111-2222',1),
+            ('Ana Oliveira','98765432100','(61)99333-4444',2),
+            ('Roberto Lima','11122233344','(61)99555-6666',3),
+            ('Fernanda Costa','55566677788','(61)99777-8888',4),
+            ('João Mendes','99988877766','(61)99999-0000',5)
+        ]:
             ins("INSERT OR IGNORE INTO motoristas(empresa_id,nome,cnh,telefone,veiculo_id,criado_em) VALUES(1,?,?,?,?,?)",(n,cnh,tel,vid,now_str()))
-        for n,cpf,tel,conv,prior in [('João Pereira','000.000.000-00','(61)98765-4321','Unimed','alta'),('Maria Santos','111.111.111-11','(61)91234-5678','Bradesco','normal'),('Pedro Alves','222.222.222-22','(61)92345-6789','SUS','normal'),('Lucia Ferreira','333.333.333-33','(61)93456-7890','Amil','alta'),('Carlos Nunes','444.444.444-44','(61)94567-8901','Unimed','normal')]:
+        for n,cpf,tel,conv,prior in [
+            ('João Pereira','000.000.000-00','(61)98765-4321','Unimed','alta'),
+            ('Maria Santos','111.111.111-11','(61)91234-5678','Bradesco','normal'),
+            ('Pedro Alves','222.222.222-22','(61)92345-6789','SUS','normal'),
+            ('Lucia Ferreira','333.333.333-33','(61)93456-7890','Amil','alta'),
+            ('Carlos Nunes','444.444.444-44','(61)94567-8901','Unimed','normal')
+        ]:
             ins("INSERT OR IGNORE INTO pacientes(empresa_id,nome,cpf,telefone,convenio,prioridade,criado_em) VALUES(1,?,?,?,?,?,?)",(n,cpf,tel,conv,prior,now_str()))
-        ins("INSERT OR IGNORE INTO clinicas(empresa_id,nome,telefone,endereco,criado_em) VALUES(1,?,?,?,?)",('Clínica São Lucas','(61)3333-4444','SCS Quadra 2',now_str()))
-        for pac,mot,vei,cli,orig,dest,sts,tipo,data,km,val in [(1,1,1,1,'Asa Norte','Clínica São Lucas','concluida','hemodiálise','14/05/2026',28.4,95.0),(2,2,2,1,'Taguatinga','Hospital Santa Lúcia','em_andamento','consulta','14/05/2026',0,75.0),(3,3,3,1,'Guará','Hospital de Base','agendada','fisioterapia','15/05/2026',0,65.0)]:
-            ins("INSERT OR IGNORE INTO corridas(empresa_id,paciente_id,motorista_id,veiculo_id,clinica_id,origem,destino,status,tipo_servico,data_agendada,km_total,valor,criado_em) VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?)",(pac,mot,vei,cli,orig,dest,sts,tipo,data,km,val,now_str()))
+        ins("INSERT OR IGNORE INTO clinicas(empresa_id,nome,telefone,endereco,criado_em) VALUES(1,?,?,?,?)",
+            ('Clínica São Lucas','(61)3333-4444','SCS Quadra 2',now_str()))
+        for pac,mot,vei,cli,orig,dest,sts,tipo,data,km,val in [
+            (1,1,1,1,'Asa Norte','Clínica São Lucas','concluida','hemodiálise','14/05/2026',28.4,95.0),
+            (2,2,2,1,'Taguatinga','Hospital Santa Lúcia','em_andamento','consulta','14/05/2026',0,75.0),
+            (3,3,3,1,'Guará','Hospital de Base','agendada','fisioterapia','15/05/2026',0,65.0)
+        ]:
+            ins("INSERT OR IGNORE INTO corridas(empresa_id,paciente_id,motorista_id,veiculo_id,clinica_id,origem,destino,status,tipo_servico,data_agendada,km_total,valor,criado_em) VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (pac,mot,vei,cli,orig,dest,sts,tipo,data,km,val,now_str()))
 
         conn.close()
-        print(f"✅ Banco {'PostgreSQL' if USE_PG else 'SQLite'} inicializado")
+        print(f"✅ Banco {'PostgreSQL' if USE_PG else 'SQLite'} inicializado com sucesso!")
     except Exception as e:
-        conn.close()
-        print(f"Erro init_db: {e}")
+        try: conn.close()
+        except: pass
+        raise Exception(f"Erro init_db: {e}")
 
 def audit(usuario, acao, detalhes='', ip='', empresa_id=1):
     try:
