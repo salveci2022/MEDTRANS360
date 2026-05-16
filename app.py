@@ -1068,3 +1068,180 @@ with app.app_context():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT',5000)), debug=False)
+# -*- coding: utf-8 -*-
+# ============================================================
+# ROTAS DE RECUPERAÇÃO DE SENHA — MEDTRANS 360
+# Adicionar no app.py após a rota /login
+# ============================================================
+
+import random, time
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+TZ = ZoneInfo('America/Sao_Paulo')
+
+# ---- TABELA (rodar uma vez no banco) ----
+# CREATE TABLE IF NOT EXISTS recuperacao_senha (
+#   id SERIAL PRIMARY KEY,
+#   email TEXT NOT NULL,
+#   codigo TEXT NOT NULL,
+#   token TEXT NOT NULL,
+#   ip TEXT,
+#   criado_em TEXT NOT NULL,
+#   expira_em TEXT NOT NULL,
+#   usado INTEGER DEFAULT 0
+# );
+
+@app.route('/esqueci-senha', methods=['GET','POST'])
+def esqueci_senha():
+    msg = erro = None
+    if request.method == 'POST':
+        email = request.form.get('email','').strip().lower()
+        ip = get_ip()
+
+        # Rate limit: máx 3 tentativas por IP em 10 min
+        if rate_limit(f'recover_{ip}', 3, 600):
+            erro = 'Muitas tentativas. Aguarde 10 minutos.'
+            return render_template('esqueci_senha.html', erro=erro)
+
+        try:
+            conn = get_conn()
+            u = conn.execute(
+                "SELECT id, nome, email FROM usuarios WHERE email=? AND ativo=1", (email,)
+            ).fetchone()
+
+            if u:
+                codigo = str(random.randint(100000, 999999))
+                token  = secrets.token_urlsafe(32)
+                agora  = datetime.now(TZ)
+                expira = (agora + timedelta(minutes=15)).strftime('%d/%m/%Y %H:%M:%S')
+                agora_str = agora.strftime('%d/%m/%Y %H:%M:%S')
+
+                conn.execute("""
+                    INSERT INTO recuperacao_senha
+                    (email, codigo, token, ip, criado_em, expira_em, usado)
+                    VALUES (?, ?, ?, ?, ?, ?, 0)
+                """, (email, codigo, token, ip, agora_str, expira))
+                conn.commit()
+
+                # Enviar e-mail com código
+                corpo = f"""
+                <div style="font-family:Arial;max-width:600px;margin:0 auto;background:#0a1628;padding:32px;border-radius:12px">
+                  <div style="text-align:center;margin-bottom:24px">
+                    <h1 style="color:#00d4c8;font-size:24px;margin:0">MEDTRANS 360</h1>
+                    <p style="color:#a8bcd4;font-size:13px;margin:4px 0">Recuperação Segura de Acesso</p>
+                  </div>
+                  <div style="background:#0d1e35;border-radius:8px;padding:24px;border:1px solid #1a3555">
+                    <p style="color:#ffffff;font-size:16px">Olá, <strong>{u['nome'] if u else ''}</strong>!</p>
+                    <p style="color:#a8bcd4">Recebemos uma solicitação de recuperação de senha.</p>
+                    <p style="color:#a8bcd4">Seu código de verificação é:</p>
+                    <div style="text-align:center;margin:24px 0">
+                      <span style="background:#00d4c8;color:#0a1628;font-size:36px;font-weight:700;
+                             letter-spacing:12px;padding:16px 32px;border-radius:8px;display:inline-block">
+                        {codigo}
+                      </span>
+                    </div>
+                    <p style="color:#a8bcd4;font-size:13px">
+                      ⏱ Este código expira em <strong style="color:#ffffff">15 minutos</strong>.
+                    </p>
+                    <p style="color:#a8bcd4;font-size:13px">
+                      🔒 Se não foi você, ignore este e-mail.
+                    </p>
+                  </div>
+                  <p style="color:#a8bcd4;font-size:11px;text-align:center;margin-top:16px">
+                    SPYNET Tecnologia Forense · CNPJ 64.000.808/0001-51
+                  </p>
+                </div>
+                """
+                send_email(email, '🔐 Código de recuperação — MEDTRANS 360', corpo)
+                conn.close()
+
+                # Redirecionar para tela de verificação com token
+                return redirect(url_for('verificar_codigo', token=token))
+            else:
+                # Não revelar se email existe ou não (segurança)
+                time.sleep(1)
+                msg = 'Se o e-mail estiver cadastrado, você receberá o código em instantes.'
+            conn.close()
+        except Exception as e:
+            print(f'[RECOVER] Erro: {e}')
+            erro = 'Erro interno. Tente novamente.'
+
+    return render_template('esqueci_senha.html', msg=msg, erro=erro)
+
+
+@app.route('/verificar-codigo/<token>', methods=['GET','POST'])
+def verificar_codigo(token):
+    msg = erro = None
+    if request.method == 'POST':
+        codigo = request.form.get('codigo','').strip()
+        ip = get_ip()
+
+        if rate_limit(f'verify_{ip}', 5, 300):
+            erro = 'Muitas tentativas. Aguarde 5 minutos.'
+            return render_template('verificar_codigo.html', token=token, erro=erro)
+
+        try:
+            conn = get_conn()
+            agora = datetime.now(TZ).strftime('%d/%m/%Y %H:%M:%S')
+            rec = conn.execute("""
+                SELECT * FROM recuperacao_senha
+                WHERE token=? AND codigo=? AND usado=0
+            """, (token, codigo)).fetchone()
+
+            if rec and rec['expira_em'] >= agora:
+                conn.execute(
+                    "UPDATE recuperacao_senha SET usado=1 WHERE token=?", (token,)
+                )
+                conn.commit()
+                conn.close()
+                # Gerar token de redefinição
+                reset_token = secrets.token_urlsafe(32)
+                session['reset_email'] = rec['email']
+                session['reset_token'] = reset_token
+                return redirect(url_for('nova_senha'))
+            elif rec and rec['expira_em'] < agora:
+                erro = 'Código expirado. Solicite um novo.'
+            else:
+                erro = 'Código inválido. Verifique e tente novamente.'
+            conn.close()
+        except Exception as e:
+            print(f'[VERIFY] Erro: {e}')
+            erro = 'Erro interno. Tente novamente.'
+
+    return render_template('verificar_codigo.html', token=token, msg=msg, erro=erro)
+
+
+@app.route('/nova-senha', methods=['GET','POST'])
+def nova_senha():
+    if not session.get('reset_email'):
+        return redirect(url_for('esqueci_senha'))
+
+    msg = erro = None
+    if request.method == 'POST':
+        senha = request.form.get('senha','')
+        confirmar = request.form.get('confirmar','')
+
+        if len(senha) < 8:
+            erro = 'A senha deve ter no mínimo 8 caracteres.'
+        elif senha != confirmar:
+            erro = 'As senhas não conferem.'
+        else:
+            try:
+                conn = get_conn()
+                email = session.get('reset_email')
+                conn.execute(
+                    "UPDATE usuarios SET senha=? WHERE email=?",
+                    (hash_senha(senha), email)
+                )
+                conn.commit()
+                audit(email, 'recuperar_senha', '', get_ip())
+                conn.close()
+                session.pop('reset_email', None)
+                session.pop('reset_token', None)
+                return redirect(url_for('login', msg='Senha redefinida com sucesso!'))
+            except Exception as e:
+                print(f'[RESET] Erro: {e}')
+                erro = 'Erro ao salvar. Tente novamente.'
+
+    return render_template('nova_senha.html', msg=msg, erro=erro)
