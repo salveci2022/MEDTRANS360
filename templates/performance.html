@@ -188,12 +188,12 @@
         </tr>
       </thead>
       <tbody>
-        {% for i, m in ranking|enumerate %}
+        {% for m in ranking %}
         {% set taxa = ((m.concluidas / m.total_corridas * 100) if m.total_corridas else 0)|round(1) %}
         {% set online = m.em_andamento > 0 %}
         <tr>
           <td style="text-align:center">
-            <span class="rank-badge rank-{{ i+1 if i < 3 else 'n' }}">{{ i+1 }}</span>
+            <span class="rank-badge rank-{{ loop.index if loop.index <= 3 else 'n' }}">{{ loop.index }}</span>
           </td>
           <td>
             <div style="display:flex;align-items:center;gap:8px">
