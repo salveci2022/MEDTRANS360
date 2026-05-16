@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recuperar Senha — MEDTRANS 360</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a1628;font-family:Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:#0d1e35;border:1px solid #1a3555;border-radius:16px;padding:40px;width:100%;max-width:440px;animation:fadeIn .4s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.logo{text-align:center;margin-bottom:32px}
+.logo h1{color:#00d4c8;font-size:26px;letter-spacing:2px}
+.logo p{color:#a8bcd4;font-size:12px;margin-top:4px}
+.badge{background:#00d4c8;color:#0a1628;font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px;display:inline-block;margin-top:8px;letter-spacing:1px}
+h2{color:#ffffff;font-size:18px;margin-bottom:8px;text-align:center}
+.sub{color:#a8bcd4;font-size:13px;text-align:center;margin-bottom:28px;line-height:1.6}
+label{color:#a8bcd4;font-size:13px;display:block;margin-bottom:6px}
+input{width:100%;background:#162d47;border:1px solid #1a3555;border-radius:8px;padding:12px 16px;color:#ffffff;font-size:14px;transition:border .2s;outline:none}
+input:focus{border-color:#00d4c8}
+.grupo{margin-bottom:20px}
+.btn{width:100%;background:#00d4c8;color:#0a1628;border:none;border-radius:8px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;transition:opacity .2s;letter-spacing:1px;margin-top:8px}
+.btn:hover{opacity:.85}
+.erro{background:#ff000015;border:1px solid #ff000040;color:#ff6b6b;border-radius:8px;padding:12px 16px;font-size:13px;margin-bottom:20px;text-align:center}
+.msg{background:#00d4c815;border:1px solid #00d4c840;color:#00d4c8;border-radius:8px;padding:12px 16px;font-size:13px;margin-bottom:20px;text-align:center}
+.voltar{display:block;text-align:center;color:#a8bcd4;font-size:13px;text-decoration:none;margin-top:20px;transition:color .2s}
+.voltar:hover{color:#00d4c8}
+.shield{font-size:48px;text-align:center;margin-bottom:16px}
+.footer{color:#a8bcd4;font-size:11px;text-align:center;margin-top:24px;opacity:.6}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div class="shield">🔐</div>
+    <h1>MEDTRANS 360</h1>
+    <p>Plataforma de Gestão de Transporte Médico</p>
+    <span class="badge">RECUPERAÇÃO SEGURA DE ACESSO</span>
+  </div>
+
+  <h2>Esqueceu sua senha?</h2>
+  <p class="sub">Informe seu e-mail cadastrado.<br>Enviaremos um código de verificação.</p>
+
+  {% if erro %}<div class="erro">⚠️ {{ erro }}</div>{% endif %}
+  {% if msg %}<div class="msg">✅ {{ msg }}</div>{% endif %}
+
+  {% if not msg %}
+  <form method="POST">
+    <div class="grupo">
+      <label>E-mail cadastrado</label>
+      <input type="email" name="email" placeholder="seu@email.com.br" required autofocus>
+    </div>
+    <button type="submit" class="btn">📨 ENVIAR CÓDIGO DE VERIFICAÇÃO</button>
+  </form>
+  {% endif %}
+
+  <a href="/login" class="voltar">← Voltar ao login</a>
+  <p class="footer">SPYNET Tecnologia Forense · CNPJ 64.000.808/0001-51</p>
+</div>
+</body>
+</html>
