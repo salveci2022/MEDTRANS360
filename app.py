@@ -708,155 +708,164 @@ def excluir_usuario(uid):
 @app.route('/relatorios/performance')
 @perfil_required('master','operador')
 def performance_motoristas():
-    conn = get_conn()
-    eid = session.get('empresa_id', 1)
-
-    # Filtros
-    periodo = request.args.get('periodo', '30')
-    motorista_id = request.args.get('motorista_id', '')
-
     from datetime import datetime as dt, timedelta as td
     TZ2 = ZoneInfo('America/Sao_Paulo')
 
-    # Datas para filtro
-    dias = int(periodo) if periodo.isdigit() else 30
-    data_inicio = (dt.now(TZ2) - td(days=dias)).strftime('%d/%m/%Y')
+    # Valores padrão seguros
+    periodo = request.args.get('periodo', '30')
+    motorista_id = request.args.get('motorista_id', '').strip()
+    eid = session.get('empresa_id', 1)
 
-    # Lista de motoristas para filtro
-    motoristas_lista = conn.execute(
-        "SELECT * FROM motoristas WHERE ativo=1 AND empresa_id=? ORDER BY nome", (eid,)
-    ).fetchall()
-
-    # Query base
-    filtro_mot = f" AND c.motorista_id={motorista_id}" if motorista_id else ""
-
-    # Stats gerais
-    total_corridas = conn.execute(
-        f"SELECT COUNT(*) FROM corridas c WHERE c.empresa_id=?{filtro_mot}", (eid,)
-    ).fetchone()[0]
-
-    concluidas = conn.execute(
-        f"SELECT COUNT(*) FROM corridas c WHERE c.status='concluida' AND c.empresa_id=?{filtro_mot}", (eid,)
-    ).fetchone()[0]
-
-    em_andamento = conn.execute(
-        f"SELECT COUNT(*) FROM corridas c WHERE c.status='em_andamento' AND c.empresa_id=?{filtro_mot}", (eid,)
-    ).fetchone()[0]
-
-    agendadas = conn.execute(
-        f"SELECT COUNT(*) FROM corridas c WHERE c.status='agendada' AND c.empresa_id=?{filtro_mot}", (eid,)
-    ).fetchone()[0]
-
-    km_total = conn.execute(
-        f"SELECT COALESCE(SUM(km_total),0) FROM corridas c WHERE c.status='concluida' AND c.empresa_id=?{filtro_mot}", (eid,)
-    ).fetchone()[0] or 0
-
-    receita_total = conn.execute(
-        f"SELECT COALESCE(SUM(valor),0) FROM corridas c WHERE c.status='concluida' AND c.empresa_id=?{filtro_mot}", (eid,)
-    ).fetchone()[0] or 0
-
-    custo_combustivel = conn.execute(
-        "SELECT COALESCE(SUM(valor_total),0) FROM combustivel WHERE empresa_id=?", (eid,)
-    ).fetchone()[0] or 0
-
-    # Motoristas online (com corrida em andamento)
-    mot_online = conn.execute(
-        "SELECT COUNT(DISTINCT motorista_id) FROM corridas WHERE status='em_andamento' AND empresa_id=?", (eid,)
-    ).fetchone()[0]
-
-    # Ranking de motoristas
-    ranking = conn.execute(f"""
-        SELECT m.id, m.nome, m.telefone,
-               COUNT(c.id) as total_corridas,
-               SUM(CASE WHEN c.status='concluida' THEN 1 ELSE 0 END) as concluidas,
-               SUM(CASE WHEN c.status='em_andamento' THEN 1 ELSE 0 END) as em_andamento,
-               COALESCE(SUM(c.km_total),0) as km_total,
-               COALESCE(SUM(c.valor),0) as receita,
-               COALESCE(AVG(c.km_total),0) as km_medio,
-               MAX(c.criado_em) as ultima_corrida
-        FROM motoristas m
-        LEFT JOIN corridas c ON m.id=c.motorista_id AND c.empresa_id=?
-        WHERE m.empresa_id=? AND m.ativo=1
-        GROUP BY m.id, m.nome, m.telefone
-        ORDER BY concluidas DESC, km_total DESC
-    """, (eid, eid)).fetchall()
-
-    # Combustível por motorista
-    combustivel_mot = conn.execute("""
-        SELECT m.nome, 
-               COUNT(cb.id) as abastecimentos,
-               COALESCE(SUM(cb.litros),0) as litros_total,
-               COALESCE(SUM(cb.valor_total),0) as custo_total
-        FROM motoristas m
-        LEFT JOIN combustivel cb ON m.id=cb.motorista_id
-        WHERE m.empresa_id=? AND m.ativo=1
-        GROUP BY m.id, m.nome
-        ORDER BY custo_total DESC
-    """, (eid,)).fetchall()
-
-    # Corridas por dia (últimos 7 dias)
-    corridas_semana = []
-    for i in range(6, -1, -1):
-        d = (dt.now(TZ2) - td(days=i)).strftime('%d/%m/%Y')
-        n = conn.execute(
-            "SELECT COUNT(*) FROM corridas WHERE data_agendada=? AND empresa_id=?", (d, eid)
-        ).fetchone()[0]
-        corridas_semana.append({'dia': (dt.now(TZ2) - td(days=i)).strftime('%d/%m'), 'total': n})
-
-    # Corridas por tipo
-    por_tipo = conn.execute("""
-        SELECT tipo_servico, COUNT(*) as total,
-               COALESCE(SUM(km_total),0) as km,
-               COALESCE(SUM(valor),0) as receita
-        FROM corridas WHERE empresa_id=? AND status='concluida'
-        GROUP BY tipo_servico ORDER BY total DESC
-    """, (eid,)).fetchall()
-
-    # Corridas recentes detalhadas
-    corridas_recentes = conn.execute("""
-        SELECT c.*, m.nome as motorista_nome, p.nome as paciente_nome,
-               v.modelo as veiculo_modelo, v.placa
-        FROM corridas c
-        LEFT JOIN motoristas m ON c.motorista_id=m.id
-        LEFT JOIN pacientes p ON c.paciente_id=p.id
-        LEFT JOIN veiculos v ON c.veiculo_id=v.id
-        WHERE c.empresa_id=?
-        ORDER BY c.id DESC LIMIT 20
-    """, (eid,)).fetchall()
-
-    conn.close()
-    audit(session.get('email'), 'ver_performance', '', get_ip())
-
-    taxa_conclusao = round((concluidas / total_corridas * 100) if total_corridas else 0, 1)
-    custo_por_km = round(custo_combustivel / km_total, 2) if km_total > 0 else 0
-    receita_por_corrida = round(receita_total / concluidas, 2) if concluidas > 0 else 0
-
-    return render_template('performance.html',
-        motoristas_lista=motoristas_lista,
-        ranking=ranking,
-        combustivel_mot=combustivel_mot,
-        corridas_semana=corridas_semana,
-        por_tipo=por_tipo,
-        corridas_recentes=corridas_recentes,
-        stats={
-            'total_corridas': total_corridas,
-            'concluidas': concluidas,
-            'em_andamento': em_andamento,
-            'agendadas': agendadas,
-            'km_total': round(km_total, 1),
-            'receita_total': receita_total,
-            'custo_combustivel': custo_combustivel,
-            'mot_online': mot_online,
-            'mot_total': len(motoristas_lista),
-            'taxa_conclusao': taxa_conclusao,
-            'custo_por_km': custo_por_km,
-            'receita_por_corrida': receita_por_corrida,
-        },
-        periodo=periodo,
-        motorista_id=motorista_id,
-        usuario=session.get('nome'),
-        perfil=session.get('perfil')
+    # Estrutura de dados vazia para fallback
+    dados_vazios = dict(
+        motoristas_lista=[], ranking=[], combustivel_mot=[],
+        corridas_semana=[{'dia': (dt.now(TZ2) - td(days=i)).strftime('%d/%m'), 'total': 0} for i in range(6,-1,-1)],
+        por_tipo=[], corridas_recentes=[],
+        stats=dict(total_corridas=0,concluidas=0,em_andamento=0,agendadas=0,
+                   km_total=0,receita_total=0,custo_combustivel=0,mot_online=0,
+                   mot_total=0,taxa_conclusao=0,custo_por_km=0,receita_por_corrida=0),
+        periodo=periodo, motorista_id=motorista_id,
+        usuario=session.get('nome'), perfil=session.get('perfil')
     )
+
+    conn = None
+    try:
+        conn = get_conn()
+        dias = int(periodo) if periodo.isdigit() else 30
+
+        # Validar motorista_id
+        filtro_mot = ""
+        params_mot = [eid]
+        if motorista_id and motorista_id.isdigit():
+            filtro_mot = " AND c.motorista_id=%s" % motorista_id if USE_PG else " AND c.motorista_id=" + motorista_id
+
+        def scalar(sql, params):
+            try:
+                r = conn.execute(sql, params).fetchone()
+                if r is None: return 0
+                v = list(r.values())[0] if USE_PG else r[0]
+                return v or 0
+            except: return 0
+
+        motoristas_lista = conn.execute(
+            "SELECT * FROM motoristas WHERE ativo=1 AND empresa_id=? ORDER BY nome", (eid,)
+        ).fetchall() or []
+
+        total_corridas = scalar(f"SELECT COUNT(*) FROM corridas c WHERE c.empresa_id=?{filtro_mot}", (eid,))
+        concluidas = scalar(f"SELECT COUNT(*) FROM corridas c WHERE c.status='concluida' AND c.empresa_id=?{filtro_mot}", (eid,))
+        em_andamento = scalar(f"SELECT COUNT(*) FROM corridas c WHERE c.status='em_andamento' AND c.empresa_id=?{filtro_mot}", (eid,))
+        agendadas = scalar(f"SELECT COUNT(*) FROM corridas c WHERE c.status='agendada' AND c.empresa_id=?{filtro_mot}", (eid,))
+        km_total = float(scalar(f"SELECT COALESCE(SUM(km_total),0) FROM corridas c WHERE c.status='concluida' AND c.empresa_id=?{filtro_mot}", (eid,)))
+        receita_total = float(scalar(f"SELECT COALESCE(SUM(valor),0) FROM corridas c WHERE c.status='concluida' AND c.empresa_id=?{filtro_mot}", (eid,)))
+        custo_combustivel = float(scalar("SELECT COALESCE(SUM(valor_total),0) FROM combustivel WHERE empresa_id=?", (eid,)))
+        mot_online = scalar("SELECT COUNT(DISTINCT motorista_id) FROM corridas WHERE status='em_andamento' AND empresa_id=?", (eid,))
+
+        try:
+            ranking = conn.execute(f"""
+                SELECT m.id, m.nome, m.telefone,
+                       COUNT(c.id) as total_corridas,
+                       SUM(CASE WHEN c.status='concluida' THEN 1 ELSE 0 END) as concluidas,
+                       SUM(CASE WHEN c.status='em_andamento' THEN 1 ELSE 0 END) as em_andamento,
+                       COALESCE(SUM(c.km_total),0) as km_total,
+                       COALESCE(SUM(c.valor),0) as receita,
+                       COALESCE(AVG(c.km_total),0) as km_medio,
+                       MAX(c.criado_em) as ultima_corrida
+                FROM motoristas m
+                LEFT JOIN corridas c ON m.id=c.motorista_id AND c.empresa_id=?
+                WHERE m.empresa_id=? AND m.ativo=1
+                GROUP BY m.id, m.nome, m.telefone
+                ORDER BY concluidas DESC, km_total DESC
+            """, (eid, eid)).fetchall() or []
+        except Exception as e:
+            print(f"[PERF] Erro ranking: {e}")
+            ranking = []
+
+        try:
+            combustivel_mot = conn.execute("""
+                SELECT m.nome,
+                       COUNT(cb.id) as abastecimentos,
+                       COALESCE(SUM(cb.litros),0) as litros_total,
+                       COALESCE(SUM(cb.valor_total),0) as custo_total
+                FROM motoristas m
+                LEFT JOIN combustivel cb ON m.id=cb.motorista_id
+                WHERE m.empresa_id=? AND m.ativo=1
+                GROUP BY m.id, m.nome
+                ORDER BY custo_total DESC
+            """, (eid,)).fetchall() or []
+        except Exception as e:
+            print(f"[PERF] Erro combustivel: {e}")
+            combustivel_mot = []
+
+        corridas_semana = []
+        for i in range(6, -1, -1):
+            try:
+                d = (dt.now(TZ2) - td(days=i)).strftime('%d/%m/%Y')
+                n = scalar("SELECT COUNT(*) FROM corridas WHERE data_agendada=? AND empresa_id=?", (d, eid))
+                corridas_semana.append({'dia': (dt.now(TZ2) - td(days=i)).strftime('%d/%m'), 'total': int(n)})
+            except:
+                corridas_semana.append({'dia': '?', 'total': 0})
+
+        try:
+            por_tipo = conn.execute("""
+                SELECT tipo_servico, COUNT(*) as total,
+                       COALESCE(SUM(km_total),0) as km,
+                       COALESCE(SUM(valor),0) as receita
+                FROM corridas WHERE empresa_id=? AND status='concluida'
+                GROUP BY tipo_servico ORDER BY total DESC
+            """, (eid,)).fetchall() or []
+        except Exception as e:
+            print(f"[PERF] Erro por_tipo: {e}")
+            por_tipo = []
+
+        try:
+            corridas_recentes = conn.execute("""
+                SELECT c.*, m.nome as motorista_nome, p.nome as paciente_nome,
+                       v.modelo as veiculo_modelo, v.placa
+                FROM corridas c
+                LEFT JOIN motoristas m ON c.motorista_id=m.id
+                LEFT JOIN pacientes p ON c.paciente_id=p.id
+                LEFT JOIN veiculos v ON c.veiculo_id=v.id
+                WHERE c.empresa_id=?
+                ORDER BY c.id DESC LIMIT 20
+            """, (eid,)).fetchall() or []
+        except Exception as e:
+            print(f"[PERF] Erro corridas_recentes: {e}")
+            corridas_recentes = []
+
+        conn.close()
+        audit(session.get('email'), 'ver_performance', '', get_ip())
+
+        taxa_conclusao = round((concluidas / total_corridas * 100) if total_corridas else 0, 1)
+        custo_por_km = round(custo_combustivel / km_total, 2) if km_total > 0 else 0
+        receita_por_corrida = round(receita_total / concluidas, 2) if concluidas > 0 else 0
+
+        return render_template('performance.html',
+            motoristas_lista=motoristas_lista,
+            ranking=ranking,
+            combustivel_mot=combustivel_mot,
+            corridas_semana=corridas_semana,
+            por_tipo=por_tipo,
+            corridas_recentes=corridas_recentes,
+            stats=dict(
+                total_corridas=total_corridas, concluidas=concluidas,
+                em_andamento=em_andamento, agendadas=agendadas,
+                km_total=round(km_total, 1), receita_total=receita_total,
+                custo_combustivel=custo_combustivel, mot_online=mot_online,
+                mot_total=len(motoristas_lista), taxa_conclusao=taxa_conclusao,
+                custo_por_km=custo_por_km, receita_por_corrida=receita_por_corrida,
+            ),
+            periodo=periodo, motorista_id=motorista_id,
+            usuario=session.get('nome'), perfil=session.get('perfil')
+        )
+
+    except Exception as e:
+        import traceback
+        print(f"[PERF ERROR] {e}")
+        print(traceback.format_exc())
+        try:
+            if conn: conn.close()
+        except: pass
+        return render_template('performance.html', **dados_vazios)
 
 @app.route('/relatorios/performance/pdf')
 @perfil_required('master','operador')
