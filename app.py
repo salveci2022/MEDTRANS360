@@ -1153,7 +1153,7 @@ def esqueci_senha():
                   </p>
                 </div>
                 """
-                send_email(email, '🔐 Código de recuperação — MEDTRANS 360', corpo)
+                enviar_email(email, '🔐 Código de recuperação — MEDTRANS 360', corpo)
                 conn.close()
 
                 # Redirecionar para tela de verificação com token
